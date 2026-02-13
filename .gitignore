@@ -1,0 +1,58 @@
+# ===========================
+# Xcode / Swift .gitignore
+# ===========================
+
+# ビルド成果物（コンパイル済みファイル）
+build/
+DerivedData/
+*.o
+*.d
+
+# Xcode自動生成ファイル（個人設定が含まれるため除外）
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# SwiftPM（パッケージマネージャー）
+.build/
+.swiftpm/
+
+# CocoaPods（使う場合）
+# Pods/
+# Podfile.lock
+
+# macOS システムファイル
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 証明書・プロビジョニングファイル（絶対にGitに含めない！）
+*.p12
+*.mobileprovision
+*.cer
+
+# 環境変数・APIキーファイル（絶対に含めない！）
+.env
+Secrets.swift
+APIKeys.swift
+Config.plist
+
+# Xcode Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# SwiftLint
+.swiftlint.yml.bak
