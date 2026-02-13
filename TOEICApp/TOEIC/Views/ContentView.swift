@@ -6,25 +6,19 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         TabView {
-            // ホーム・問題集選択タブ
+            // ホーム: 解答シート一覧
             HomeView()
                 .tabItem {
                     Label("ホーム", systemImage: "house.fill")
                 }
-            
-            // 復習タブ
-            ReviewView()
-                .tabItem {
-                    Label("復習", systemImage: "arrow.counterclockwise.circle.fill")
-                }
-            
-            // 学習履歴タブ
+
+            // 履歴: 採点済みシート
             HistoryView()
                 .tabItem {
                     Label("履歴", systemImage: "clock.fill")
                 }
-            
-            // 設定タブ
+
+            // 設定
             SettingsView()
                 .tabItem {
                     Label("設定", systemImage: "gearshape.fill")

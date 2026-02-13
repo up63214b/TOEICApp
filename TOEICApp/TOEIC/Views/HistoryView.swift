@@ -1,26 +1,26 @@
 // HistoryView.swift
-// TOEICApp - 学習履歴画面（Phase 4）
+// TOEICApp - 採点済みシートの履歴画面
 
 import SwiftUI
 
 struct HistoryView: View {
-    
+
     @EnvironmentObject var dataManager: DataManager
     @State private var showClearAlert = false
-    
+
     var body: some View {
         NavigationStack {
             Group {
-                if dataManager.studyHistory.isEmpty {
-                    EmptyHistoryView()
+                if dataManager.scoredSheets.isEmpty {
+                    emptyView
                 } else {
-                    HistoryListView()
+                    historyListView
                 }
             }
-            .navigationTitle("学習履歴")
+            .navigationTitle("履歴")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                if !dataManager.studyHistory.isEmpty {
+                if !dataManager.scoredSheets.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("クリア") {
                             showClearAlert = true
@@ -29,100 +29,74 @@ struct HistoryView: View {
                     }
                 }
             }
-            .alert("履歴を削除", isPresented: $showClearAlert) {
+            .alert("採点済みシートを全て削除しますか？", isPresented: $showClearAlert) {
                 Button("キャンセル", role: .cancel) {}
                 Button("削除する", role: .destructive) {
-                    dataManager.clearHistory()
+                    for sheet in dataManager.scoredSheets {
+                        dataManager.deleteSheet(sheet)
+                    }
                 }
             } message: {
-                Text("すべての学習履歴を削除します。この操作は元に戻せません。")
+                Text("採点済みの全シートが削除されます。この操作は元に戻せません。")
             }
         }
     }
-}
 
-// MARK: - 履歴なし表示
-struct EmptyHistoryView: View {
-    var body: some View {
+    // MARK: - 空の状態
+    private var emptyView: some View {
         VStack(spacing: 20) {
             Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 60))
                 .foregroundColor(.gray.opacity(0.5))
-            
-            Text("学習履歴がありません")
+
+            Text("採点済みシートがありません")
                 .font(.title3)
                 .fontWeight(.semibold)
-            
-            Text("問題集を解くと\nここに記録されます")
+
+            Text("解答シートを採点すると\nここに記録されます")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }
     }
-}
 
-// MARK: - 履歴リスト
-struct HistoryListView: View {
-    
-    @EnvironmentObject var dataManager: DataManager
-    
-    // 日付でグループ化
-    var groupedHistory: [(String, [StudyHistory])] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月dd日"
-        formatter.locale = Locale(identifier: "ja_JP")
-        
-        let grouped = Dictionary(grouping: dataManager.studyHistory) { history in
-            formatter.string(from: history.date)
-        }
-        
-        return grouped.sorted { $0.key > $1.key }
-    }
-    
-    var body: some View {
+    // MARK: - 履歴リスト
+    private var historyListView: some View {
         List {
-            // 統計サマリー
+            // サマリーセクション
             Section {
-                HistorySummaryView()
+                historySummary
             }
-            
-            // 履歴リスト（日付グループ）
-            ForEach(groupedHistory, id: \.0) { date, histories in
+
+            // 日付別グループ
+            ForEach(groupedHistory, id: \.0) { date, sheets in
                 Section(header: Text(date)) {
-                    ForEach(histories) { history in
-                        HistoryRowView(history: history)
+                    ForEach(sheets) { sheet in
+                        NavigationLink(destination: SheetDetailView(sheet: sheet)) {
+                            HistorySheetRowView(sheet: sheet)
+                        }
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
     }
-}
 
-// MARK: - 統計サマリー
-struct HistorySummaryView: View {
-    @EnvironmentObject var dataManager: DataManager
-    
-    var body: some View {
+    // MARK: - サマリー
+    private var historySummary: some View {
         VStack(spacing: 12) {
-            Text("学習サマリー")
+            Text("採点サマリー")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             HStack(spacing: 0) {
-                SummaryItem(
-                    value: "\(dataManager.totalStudySessions)",
-                    label: "学習回数",
+                SummaryStatView(
+                    value: "\(dataManager.totalScoredSheets)",
+                    label: "採点回数",
                     color: .blue
                 )
                 Divider().frame(height: 40)
-                SummaryItem(
-                    value: "\(dataManager.totalQuestionsAnswered)",
-                    label: "総回答数",
-                    color: .purple
-                )
-                Divider().frame(height: 40)
-                SummaryItem(
+                SummaryStatView(
                     value: String(format: "%.0f%%", dataManager.averageScore),
                     label: "平均正解率",
                     color: .green
@@ -131,13 +105,27 @@ struct HistorySummaryView: View {
         }
         .padding(.vertical, 4)
     }
+
+    // 日付グループ
+    private var groupedHistory: [(String, [AnswerSheet])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年MM月dd日"
+        formatter.locale = Locale(identifier: "ja_JP")
+
+        let grouped = Dictionary(grouping: dataManager.scoredSheets) { sheet in
+            formatter.string(from: sheet.createdAt)
+        }
+
+        return grouped.sorted { $0.key > $1.key }
+    }
 }
 
-struct SummaryItem: View {
+// MARK: - サマリー統計
+struct SummaryStatView: View {
     let value: String
     let label: String
     let color: Color
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
@@ -152,58 +140,60 @@ struct SummaryItem: View {
     }
 }
 
-// MARK: - 履歴行
-struct HistoryRowView: View {
-    let history: StudyHistory
-    
+// MARK: - 履歴シート行
+struct HistorySheetRowView: View {
+    let sheet: AnswerSheet
+
     var scoreColor: Color {
-        switch history.scorePercentage {
+        switch sheet.scorePercentage {
         case 80...100: return .green
         case 60..<80:  return .orange
         default:       return .red
         }
     }
-    
-    var formattedTime: String {
+
+    var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        return formatter.string(from: history.date)
+        return formatter.string(from: sheet.createdAt)
     }
-    
+
     var body: some View {
         HStack(spacing: 14) {
-            // スコアサークル（小）
+            // スコアサークル
             ZStack {
                 Circle()
                     .fill(scoreColor.opacity(0.15))
                     .frame(width: 48, height: 48)
-                
-                Text(String(format: "%.0f", history.scorePercentage))
+
+                Text(String(format: "%.0f", sheet.scorePercentage))
                     .font(.system(.caption, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundColor(scoreColor)
             }
-            
-            // 情報
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(history.questionSetTitle)
+                Text(sheet.title)
                     .font(.body)
                     .fontWeight(.medium)
-                
+                    .lineLimit(1)
+
                 HStack(spacing: 8) {
-                    Label(history.formattedScore, systemImage: "checkmark.circle")
+                    Label("\(sheet.totalCorrect)/\(TOEICTemplate.totalQuestions)", systemImage: "checkmark.circle")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    Label(history.formattedTimeSpent, systemImage: "clock")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+
+                    if sheet.elapsedSeconds > 0 {
+                        Label(sheet.formattedTime, systemImage: "clock")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
-            
+
             Spacer()
-            
-            Text(formattedTime)
+
+            Text(formattedDate)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
