@@ -33,6 +33,7 @@ struct AnswerInputView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("閉じる") {
                         viewModel.stopTimer()
+                        viewModel.saveToStorage()
                         dismiss()
                     }
                 }

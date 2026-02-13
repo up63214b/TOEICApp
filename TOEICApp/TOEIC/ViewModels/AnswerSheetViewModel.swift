@@ -96,12 +96,7 @@ class AnswerSheetViewModel: ObservableObject {
             sheet.setCorrectAnswer(choice, for: currentQuestion)
             sheet.status = .scoring
         }
-        save()
-
-        // 自動で次の問題へ
-        if currentQuestion < TOEICTemplate.totalQuestions {
-            currentQuestion += 1
-        }
+        // save()は呼ばない（親ビューの再描画でfullScreenCoverが閉じるのを防ぐ）
     }
 
     func clearCurrentAnswer() {
@@ -111,7 +106,6 @@ class AnswerSheetViewModel: ObservableObject {
         case .correct:
             sheet.correctAnswers[currentQuestion - 1] = nil
         }
-        save()
     }
 
     // MARK: - ナビゲーション
@@ -195,7 +189,6 @@ class AnswerSheetViewModel: ObservableObject {
         timer?.invalidate()
         timer = nil
         isTimerRunning = false
-        save()
     }
 
     func toggleTimer() {
@@ -207,6 +200,11 @@ class AnswerSheetViewModel: ObservableObject {
     }
 
     // MARK: - 永続化
+
+    /// 画面を閉じるときに呼ぶ（DataManagerに一括保存）
+    func saveToStorage() {
+        dataManager?.updateSheet(sheet)
+    }
 
     private func save() {
         dataManager?.updateSheet(sheet)
