@@ -31,6 +31,19 @@ MODE="${1:-all}"
 # 古いログを何件まで残すか
 MAX_LOG_FILES=20
 
+# --- 異常終了時のクリーンアップ ---
+# エラーで中断しても main ブランチに戻り、一時ファイルを掃除する
+cleanup_on_exit() {
+    local exit_code=$?
+    rm -f "$OUTPUT_DIR"/_tmp_*.txt 2>/dev/null
+    rm -rf "/tmp/ai-agent-backup-${RUN_ID}" 2>/dev/null
+    if [ $exit_code -ne 0 ]; then
+        cd "$PROJECT_DIR" 2>/dev/null && git checkout main 2>/dev/null || true
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: 異常終了（exit code: $exit_code）。mainブランチに復帰しました。" >> "$LOG_FILE" 2>/dev/null || true
+    fi
+}
+trap cleanup_on_exit EXIT
+
 # --- ユーティリティ ---
 log() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -125,7 +138,13 @@ collect_source_code() {
 
     # 収集対象: Swift, シェルスクリプト, Markdown, プロンプト定義
     # 除外: output/（ログ・一時ファイル）, .git/, xcodeproj内部, Assets
-    find "$PROJECT_DIR" \
+    # プロセス置換を使用（スペース入りファイル名でも安全）
+    while IFS= read -r -d '' file; do
+        local relative_path="${file#$PROJECT_DIR/}"
+        echo "========== $relative_path ==========" >> "$source_file"
+        cat "$file" >> "$source_file"
+        echo "" >> "$source_file"
+    done < <(find "$PROJECT_DIR" \
         \( -name "*.swift" -o -name "*.sh" -o -name "*.md" -o -name "*.plist" \) \
         -type f \
         ! -path "*/output/*" \
@@ -133,12 +152,7 @@ collect_source_code() {
         ! -path "*.xcodeproj/*" \
         ! -path "*/xcworkspace/*" \
         ! -path "*/Assets.xcassets/*" \
-        | sort | while read -r file; do
-        local relative_path="${file#$PROJECT_DIR/}"
-        echo "========== $relative_path ==========" >> "$source_file"
-        cat "$file" >> "$source_file"
-        echo "" >> "$source_file"
-    done
+        -print0 | sort -z)
 
     local line_count
     line_count=$(wc -l < "$source_file" | tr -d ' ')
@@ -263,7 +277,6 @@ Co-Authored-By: AI Agent <ai-agent@toiecapp.local>" 2>>"$LOG_FILE"
     fi
 
     rm -f "$tmp_prompt"
-    rm -rf "$backup_dir"
     echo "$improve_output"
 }
 
@@ -327,10 +340,10 @@ create_github_issue() {
 
     # 検証結果からverdictを取得
     local verdict
-    verdict=$(python3 -c "
-import json
+    verdict=$(VERIFY_FILE="$verify_result" python3 -c "
+import json, os
 try:
-    data = json.load(open('$verify_result'))
+    data = json.load(open(os.environ['VERIFY_FILE']))
     print(data.get('verdict', 'unknown'))
 except:
     print('unknown')

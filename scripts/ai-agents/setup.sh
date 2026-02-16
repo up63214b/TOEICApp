@@ -19,6 +19,11 @@ LOG_DIR="$SCRIPT_DIR/output"
 do_install() {
     echo "=== AI Agent 定期実行を登録します ==="
 
+    if [ ! -f "$PLIST_SOURCE" ]; then
+        echo "ERROR: plist が見つかりません: $PLIST_SOURCE"
+        exit 1
+    fi
+
     mkdir -p "$HOME/Library/LaunchAgents"
 
     # 既に登録済みなら先に解除
