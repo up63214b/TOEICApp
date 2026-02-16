@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ジョブのID -->
+    <key>Label</key>
+    <string>com.toiecapp.ai-review</string>
+
+    <!-- 実行するスクリプト -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/k.takemori/projects/TOEICApp/scripts/ai-agents/coordinator.sh</string>
+    </array>
+
+    <!-- 実行スケジュール: 5時間ごと（18000秒）に実行 -->
+    <key>StartInterval</key>
+    <integer>18000</integer>
+
+    <!-- 作業ディレクトリ -->
+    <key>WorkingDirectory</key>
+    <string>/Users/k.takemori/projects/TOEICApp</string>
+
+    <!-- ログ出力先 -->
+    <key>StandardOutPath</key>
+    <string>/Users/k.takemori/projects/TOEICApp/scripts/ai-agents/output/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/k.takemori/projects/TOEICApp/scripts/ai-agents/output/launchd-stderr.log</string>
+
+    <!-- 環境変数（claude CLI が PATH に入るように） -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/k.takemori/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/k.takemori</string>
+    </dict>
+</dict>
+</plist>
