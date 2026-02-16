@@ -38,7 +38,12 @@ cleanup_on_exit() {
     rm -f "$OUTPUT_DIR"/_tmp_*.txt 2>/dev/null
     rm -rf "/tmp/ai-agent-backup-${RUN_ID}" 2>/dev/null
     if [ $exit_code -ne 0 ]; then
-        cd "$PROJECT_DIR" 2>/dev/null && git checkout main 2>/dev/null || true
+        cd "$PROJECT_DIR" 2>/dev/null || true
+        git checkout main 2>/dev/null || true
+        # このRUNでstashした変更があれば復元
+        if git stash list 2>/dev/null | head -1 | grep -q "ai-agent-auto-stash-${RUN_ID}"; then
+            git stash pop 2>/dev/null || true
+        fi
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: 異常終了（exit code: $exit_code）。mainブランチに復帰しました。" >> "$LOG_FILE" 2>/dev/null || true
     fi
 }
