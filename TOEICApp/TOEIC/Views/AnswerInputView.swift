@@ -7,6 +7,8 @@ struct AnswerInputView: View {
 
     @ObservedObject var viewModel: AnswerSheetViewModel
     @Environment(\.dismiss) private var dismiss
+    // 正解入力が未完了のまま完了ボタンが押された場合の確認アラート（#6対応）
+    @State private var showIncompleteAlert = false
 
     var body: some View {
         NavigationStack {
@@ -48,7 +50,17 @@ struct AnswerInputView: View {
             .sheet(isPresented: $viewModel.showGrid) {
                 QuestionGridView(viewModel: viewModel)
             }
+            .alert("正解入力が未完了です", isPresented: $showIncompleteAlert) {
+                Button("続ける", role: .cancel) {}
+                Button("このまま閉じる", role: .destructive) {
+                    viewModel.score()
+                    dismiss()
+                }
+            } message: {
+                Text("\(viewModel.sheet.correctAnswersEnteredCount) / \(TOEICTemplate.totalQuestions) 問しか入力されていません。このまま閉じると未入力の問題は採点されません。")
+            }
             .onAppear {
+                // #7: startTimer() 内で guard !isTimerRunning により二重起動は防止済み
                 if viewModel.inputMode == .answer {
                     viewModel.startTimer()
                 }
@@ -199,6 +211,11 @@ struct AnswerInputView: View {
             viewModel.finishAnswering()
             dismiss()
         case .correct:
+            // 正解が未完了の場合は確認アラートを出す（#6対応）
+            if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
+                showIncompleteAlert = true
+                return
+            }
             viewModel.score()
             dismiss()
         }

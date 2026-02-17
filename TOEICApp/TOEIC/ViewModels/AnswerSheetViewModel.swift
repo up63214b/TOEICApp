@@ -11,7 +11,9 @@ enum InputMode {
 }
 
 // MARK: - ViewModel
-class AnswerSheetViewModel: ObservableObject {
+class AnswerSheetViewModel: ObservableObject, Identifiable {
+
+    let id = UUID()
 
     @Published var sheet: AnswerSheet
     @Published var currentQuestion: Int = 1

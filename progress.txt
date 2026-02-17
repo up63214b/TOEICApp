@@ -1,0 +1,29 @@
+# Progress Memory - TOEICApp（進捗メモリ）
+# AIはセッション開始時にこのファイルを読み、終了時に更新すること
+
+## 完了済み（Done）
+- MVVM構成の基本実装（Model / ViewModel / Views）
+- UserDefaults による解答シート永続化
+- 回答入力・正解入力・採点機能
+- 履歴・設定画面
+- AIエージェントシステム（6体 + coordinator.sh）
+- AIエージェントインフラ整備（config.sh / prompts/ 作成、utils.sh バグ修正）
+- AIレビュー結果の適用（#1~#4, #6, #7, #9）
+
+## AIレビュー適用済み修正内容
+- #1/#2 HomeView: fullScreenCover(item:) パターンに変更（ViewModel再生成バグ解消）
+- #3 DataManager: @MainActor 付与（メインスレッド安全性確保）
+- #4 HistoryView: DateFormatter を static let に変更（毎回生成コスト削減）
+- #6 AnswerInputView: 正解未完了時に確認アラートを表示
+- #7 AnswerInputView: startTimer() の onAppear にコメント追加
+- #9 HomeView: 採点済み5件制限のヘッダー案内を追加
+
+## 現在作業中（In Progress）
+- なし
+
+## 次にやること（Next）
+- Xcodeでビルド確認（AIレビュー修正適用後）
+- 残りのinfo指摘（#10: listeningScore/readingScore のPartScore分離）は検討中
+
+---
+最終更新: 2026-02-17

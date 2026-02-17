@@ -1,0 +1,232 @@
+{
+  "analysis_date": "2026-02-17",
+  "summary": "現在テストファイルは存在しておらず、カバレッジはゼロの状態。採点ロジック・Codable往復・ViewModel状態遷移の3領域が特に重要でテスト優先度が高い。",
+  "test_suites": [
+    {
+      "id": 1,
+      "name": "AnswerSheetScoringTests",
+      "target_file": "TOEICApp/TOEIC/Models/AnswerSheet.swift",
+      "priority": "high",
+      "description": "採点ロジック（totalCorrect・scorePercentage・partScores・listeningScore・readingScore）の正確性を検証する。最も重要なビジネスロジック。",
+      "test_cases": [
+        {
+          "name": "testTotalCorrectAllMatch",
+          "description": "全200問で回答と正解が一致する場合、totalCorrectが200になる",
+          "code": "func testTotalCorrectAllMatch() {\n    var sheet = AnswerSheet(title: \"test\")\n    for i in 1...200 {\n        let choice = TOEICTemplate.choiceLabels(for: i)[0]\n        sheet.setAnswer(choice, for: i)\n        sheet.setCorrectAnswer(choice, for: i)\n    }\n    XCTAssertEqual(sheet.totalCorrect, 200)\n    XCTAssertEqual(sheet.scorePercentage, 100.0, accuracy: 0.001)\n}"
+        },
+        {
+          "name": "testTotalCorrectNoneMatch",
+          "description": "全200問で回答と正解が一致しない場合、totalCorrectが0になる",
+          "code": "func testTotalCorrectNoneMatch() {\n    var sheet = AnswerSheet(title: \"test\")\n    for i in 1...200 {\n        let labels = TOEICTemplate.choiceLabels(for: i)\n        sheet.setAnswer(labels[0], for: i)\n        sheet.setCorrectAnswer(labels.count > 1 ? labels[1] : labels[0], for: i)\n    }\n    // Part2はA/B/Cなので必ずずれる、Part1,3,4,5,6,7はA→Bでずれる\n    XCTAssertEqual(sheet.totalCorrect, 0)\n}"
+        },
+        {
+          "name": "testScorePercentagePartial",
+          "description": "100問正解の場合、scorePercentageが50.0になる",
+          "code": "func testScorePercentagePartial() {\n    var sheet = AnswerSheet(title: \"test\")\n    // 問題1〜100を正解、101〜200を不正解に設定\n    for i in 1...100 {\n        let choice = TOEICTemplate.choiceLabels(for: i)[0]\n        sheet.setAnswer(choice, for: i)\n        sheet.setCorrectAnswer(choice, for: i)\n    }\n    for i in 101...200 {\n        let labels = TOEICTemplate.choiceLabels(for: i)\n        sheet.setAnswer(labels[0], for: i)\n        sheet.setCorrectAnswer(labels.count > 1 ? labels[1] : labels[0], for: i)\n    }\n    XCTAssertEqual(sheet.scorePercentage, 50.0, accuracy: 0.001)\n}"
+        },
+        {
+          "name": "testPartScoresCount",
+          "description": "partScoresが7要素（Part1〜7）を返す",
+          "code": "func testPartScoresCount() {\n    let sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.partScores.count, 7)\n}"
+        },
+        {
+          "name": "testPartScoresTotalQuestions",
+          "description": "全パートのtotalを合計すると200になる",
+          "code": "func testPartScoresTotalQuestions() {\n    let sheet = AnswerSheet(title: \"test\")\n    let totalQuestions = sheet.partScores.reduce(0) { $0 + $1.total }\n    XCTAssertEqual(totalQuestions, 200)\n}"
+        },
+        {
+          "name": "testListeningScoreTotalIs100",
+          "description": "listeningScoreのtotalがPart1〜4の合計（6+25+39+30=100）になる",
+          "code": "func testListeningScoreTotalIs100() {\n    let sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.listeningScore.total, 100)\n}"
+        },
+        {
+          "name": "testReadingScoreTotalIs100",
+          "description": "readingScoreのtotalがPart5〜7の合計（30+16+54=100）になる",
+          "code": "func testReadingScoreTotalIs100() {\n    let sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.readingScore.total, 100)\n}"
+        },
+        {
+          "name": "testScoreWithNoAnswers",
+          "description": "回答も正解も未入力の場合、totalCorrectが0でscorePercentageが0.0になる",
+          "code": "func testScoreWithNoAnswers() {\n    let sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.totalCorrect, 0)\n    XCTAssertEqual(sheet.scorePercentage, 0.0, accuracy: 0.001)\n}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "AnswerSheetModelTests",
+      "target_file": "TOEICApp/TOEIC/Models/AnswerSheet.swift",
+      "priority": "high",
+      "description": "回答のセット・クリア・集計カウント・境界値・displayStatusの算出ロジックを検証する。",
+      "test_cases": [
+        {
+          "name": "testSetAnswerValidRange",
+          "description": "問題番号1〜200の範囲内でsetAnswerが正しく動作する",
+          "code": "func testSetAnswerValidRange() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.setAnswer(\"A\", for: 1)\n    sheet.setAnswer(\"B\", for: 100)\n    sheet.setAnswer(\"C\", for: 200)\n    XCTAssertEqual(sheet.userAnswers[0], \"A\")\n    XCTAssertEqual(sheet.userAnswers[99], \"B\")\n    XCTAssertEqual(sheet.userAnswers[199], \"C\")\n}"
+        },
+        {
+          "name": "testSetAnswerOutOfRange",
+          "description": "問題番号0および201でsetAnswerが何もしない（境界値テスト）",
+          "code": "func testSetAnswerOutOfRange() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.setAnswer(\"A\", for: 0)\n    sheet.setAnswer(\"A\", for: 201)\n    // 全ての回答がnilのまま\n    XCTAssertTrue(sheet.userAnswers.allSatisfy { $0 == nil })\n}"
+        },
+        {
+          "name": "testClearAnswer",
+          "description": "setAnswer後にclearAnswerするとnilに戻る",
+          "code": "func testClearAnswer() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.setAnswer(\"A\", for: 50)\n    XCTAssertEqual(sheet.userAnswers[49], \"A\")\n    sheet.clearAnswer(for: 50)\n    XCTAssertNil(sheet.userAnswers[49])\n}"
+        },
+        {
+          "name": "testAnsweredCount",
+          "description": "3問回答するとansweredCountが3になる",
+          "code": "func testAnsweredCount() {\n    var sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.answeredCount, 0)\n    sheet.setAnswer(\"A\", for: 1)\n    sheet.setAnswer(\"B\", for: 2)\n    sheet.setAnswer(\"C\", for: 3)\n    XCTAssertEqual(sheet.answeredCount, 3)\n}"
+        },
+        {
+          "name": "testDisplayStatusEmpty",
+          "description": "回答も正解も未入力の場合、displayStatusが.emptyになる",
+          "code": "func testDisplayStatusEmpty() {\n    let sheet = AnswerSheet(title: \"test\")\n    XCTAssertEqual(sheet.displayStatus, .empty)\n}"
+        },
+        {
+          "name": "testDisplayStatusReady",
+          "description": "全200問の回答と正解が入力済みの場合、displayStatusが.readyになる",
+          "code": "func testDisplayStatusReady() {\n    var sheet = AnswerSheet(title: \"test\")\n    for i in 1...200 {\n        let choice = TOEICTemplate.choiceLabels(for: i)[0]\n        sheet.setAnswer(choice, for: i)\n        sheet.setCorrectAnswer(choice, for: i)\n    }\n    XCTAssertEqual(sheet.displayStatus, .ready)\n}"
+        },
+        {
+          "name": "testDisplayStatusScored",
+          "description": "status=.scoredの場合、displayStatusが.scoredになる",
+          "code": "func testDisplayStatusScored() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.status = .scored\n    XCTAssertEqual(sheet.displayStatus, .scored)\n}"
+        },
+        {
+          "name": "testFormattedTimeSeconds",
+          "description": "elapsedSeconds=90の場合、formattedTimeが\"1:30\"になる",
+          "code": "func testFormattedTimeSeconds() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.elapsedSeconds = 90\n    XCTAssertEqual(sheet.formattedTime, \"1:30\")\n}"
+        },
+        {
+          "name": "testFormattedTimeHours",
+          "description": "elapsedSeconds=3661の場合、formattedTimeが\"1:01:01\"になる",
+          "code": "func testFormattedTimeHours() {\n    var sheet = AnswerSheet(title: \"test\")\n    sheet.elapsedSeconds = 3661\n    XCTAssertEqual(sheet.formattedTime, \"1:01:01\")\n}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "CodableRoundtripTests",
+      "target_file": "TOEICApp/TOEIC/Models/AnswerSheet.swift",
+      "priority": "high",
+      "description": "AnswerSheetのCodableエンコード/デコード往復テスト。UserDefaultsへの保存・読み込みで壊れないことを保証する。",
+      "test_cases": [
+        {
+          "name": "testAnswerSheetEncodeDecode",
+          "description": "AnswerSheetをJSONエンコードしてデコードすると同一のデータになる",
+          "code": "func testAnswerSheetEncodeDecode() throws {\n    var original = AnswerSheet(title: \"往復テスト\")\n    original.setAnswer(\"A\", for: 1)\n    original.setAnswer(\"B\", for: 100)\n    original.setCorrectAnswer(\"C\", for: 1)\n    original.elapsedSeconds = 120\n    original.status = .answered\n\n    let encoder = JSONEncoder()\n    let decoder = JSONDecoder()\n    let data = try encoder.encode(original)\n    let decoded = try decoder.decode(AnswerSheet.self, from: data)\n\n    XCTAssertEqual(decoded.id, original.id)\n    XCTAssertEqual(decoded.title, original.title)\n    XCTAssertEqual(decoded.userAnswers[0], \"A\")\n    XCTAssertEqual(decoded.userAnswers[99], \"B\")\n    XCTAssertEqual(decoded.correctAnswers[0], \"C\")\n    XCTAssertEqual(decoded.elapsedSeconds, 120)\n    XCTAssertEqual(decoded.status, .answered)\n}"
+        },
+        {
+          "name": "testAnswerSheetArrayEncodeDecode",
+          "description": "[AnswerSheet]をJSONエンコードしてデコードすると件数と内容が一致する",
+          "code": "func testAnswerSheetArrayEncodeDecode() throws {\n    var sheets: [AnswerSheet] = []\n    for i in 1...3 {\n        var sheet = AnswerSheet(title: \"Sheet \\(i)\")\n        sheet.setAnswer(\"A\", for: i)\n        sheets.append(sheet)\n    }\n\n    let encoder = JSONEncoder()\n    let decoder = JSONDecoder()\n    let data = try encoder.encode(sheets)\n    let decoded = try decoder.decode([AnswerSheet].self, from: data)\n\n    XCTAssertEqual(decoded.count, 3)\n    for i in 0..<3 {\n        XCTAssertEqual(decoded[i].title, \"Sheet \\(i + 1)\")\n    }\n}"
+        },
+        {
+          "name": "testSheetStatusCodable",
+          "description": "SheetStatusの全ケースがCodableで正しく往復できる",
+          "code": "func testSheetStatusCodable() throws {\n    let statuses: [SheetStatus] = [.answering, .answered, .scoring, .scored]\n    let encoder = JSONEncoder()\n    let decoder = JSONDecoder()\n\n    for status in statuses {\n        let data = try encoder.encode(status)\n        let decoded = try decoder.decode(SheetStatus.self, from: data)\n        XCTAssertEqual(decoded, status)\n    }\n}"
+        },
+        {
+          "name": "testNilAnswersPreservedAfterDecode",
+          "description": "部分的に入力された回答でデコード後もnil/非nilが正しく保持される",
+          "code": "func testNilAnswersPreservedAfterDecode() throws {\n    var sheet = AnswerSheet(title: \"test\")\n    // 奇数問のみ回答\n    for i in stride(from: 1, through: 200, by: 2) {\n        sheet.setAnswer(\"A\", for: i)\n    }\n\n    let data = try JSONEncoder().encode(sheet)\n    let decoded = try JSONDecoder().decode(AnswerSheet.self, from: data)\n\n    XCTAssertEqual(decoded.answeredCount, 100)\n    XCTAssertNotNil(decoded.userAnswers[0])   // 問題1\n    XCTAssertNil(decoded.userAnswers[1])       // 問題2\n    XCTAssertNotNil(decoded.userAnswers[198]) // 問題199\n    XCTAssertNil(decoded.userAnswers[199])     // 問題200\n}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "TOEICTemplateTests",
+      "target_file": "TOEICApp/TOEIC/Models/AnswerSheet.swift",
+      "priority": "medium",
+      "description": "TOEICTemplateのパート判定・選択肢ラベル・問題範囲の整合性を検証する。",
+      "test_cases": [
+        {
+          "name": "testPartRangesTotalIs200",
+          "description": "全パートの問題数を合計すると200になる",
+          "code": "func testPartRangesTotalIs200() {\n    let total = TOEICTemplate.partRanges.reduce(0) { $0 + $1.range.count }\n    XCTAssertEqual(total, 200)\n    XCTAssertEqual(TOEICTemplate.totalQuestions, 200)\n}"
+        },
+        {
+          "name": "testPartForQuestionBoundaries",
+          "description": "問題番号1はPart1、問題番号7はPart2、問題番号200はPart7になる",
+          "code": "func testPartForQuestionBoundaries() {\n    // Part1: 1〜6\n    XCTAssertEqual(TOEICTemplate.part(for: 1), .part1)\n    XCTAssertEqual(TOEICTemplate.part(for: 6), .part1)\n    // Part2: 7〜31\n    XCTAssertEqual(TOEICTemplate.part(for: 7), .part2)\n    XCTAssertEqual(TOEICTemplate.part(for: 31), .part2)\n    // Part7の最後: 200\n    XCTAssertEqual(TOEICTemplate.part(for: 200), .part7)\n}"
+        },
+        {
+          "name": "testPart2ChoiceLabels",
+          "description": "Part2（問題7〜31）の選択肢ラベルはA/B/Cの3択になる",
+          "code": "func testPart2ChoiceLabels() {\n    // Part2の範囲内（問題7〜31）\n    let labels = TOEICTemplate.choiceLabels(for: 7)\n    XCTAssertEqual(labels, [\"A\", \"B\", \"C\"])\n    XCTAssertEqual(labels.count, 3)\n}"
+        },
+        {
+          "name": "testOtherPartsChoiceLabels",
+          "description": "Part2以外の選択肢ラベルはA/B/C/Dの4択になる",
+          "code": "func testOtherPartsChoiceLabels() {\n    // Part1（問題1）\n    XCTAssertEqual(TOEICTemplate.choiceLabels(for: 1), [\"A\", \"B\", \"C\", \"D\"])\n    // Part5（問題101前後）\n    XCTAssertEqual(TOEICTemplate.choiceLabels(for: 101), [\"A\", \"B\", \"C\", \"D\"])\n    // Part7（問題200）\n    XCTAssertEqual(TOEICTemplate.choiceLabels(for: 200), [\"A\", \"B\", \"C\", \"D\"])\n}"
+        },
+        {
+          "name": "testPartRangesContiguous",
+          "description": "パート範囲が連続していて重複がない（前のパートの終わり+1 = 次のパートの始まり）",
+          "code": "func testPartRangesContiguous() {\n    let ranges = TOEICTemplate.partRanges\n    XCTAssertEqual(ranges.first?.range.lowerBound, 1)\n    XCTAssertEqual(ranges.last?.range.upperBound, 200)\n\n    for i in 1..<ranges.count {\n        let prev = ranges[i - 1].range.upperBound\n        let next = ranges[i].range.lowerBound\n        XCTAssertEqual(prev + 1, next, \"パート\\(i)と\\(i+1)の範囲が連続していない\")\n    }\n}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "AnswerSheetViewModelTests",
+      "target_file": "TOEICApp/TOEIC/ViewModels/AnswerSheetViewModel.swift",
+      "priority": "medium",
+      "description": "ViewModelのナビゲーション・モード切替・境界値処理を検証する。@MainActorが必要なためasync testで対応。",
+      "test_cases": [
+        {
+          "name": "testGoToQuestionValidRange",
+          "description": "goToQuestion(100)でcurrentQuestionが100になる",
+          "code": "@MainActor\nfunc testGoToQuestionValidRange() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    vm.goToQuestion(100)\n    XCTAssertEqual(vm.currentQuestion, 100)\n}"
+        },
+        {
+          "name": "testGoToQuestionOutOfRange",
+          "description": "goToQuestion(0)やgoToQuestion(201)ではcurrentQuestionが変わらない",
+          "code": "@MainActor\nfunc testGoToQuestionOutOfRange() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    let initial = vm.currentQuestion\n    vm.goToQuestion(0)\n    XCTAssertEqual(vm.currentQuestion, initial)\n    vm.goToQuestion(201)\n    XCTAssertEqual(vm.currentQuestion, initial)\n}"
+        },
+        {
+          "name": "testGoNextAndPrevious",
+          "description": "goNext/goPreviousで問題番号が正しく増減する",
+          "code": "@MainActor\nfunc testGoNextAndPrevious() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    vm.goToQuestion(50)\n    vm.goNext()\n    XCTAssertEqual(vm.currentQuestion, 51)\n    vm.goPrevious()\n    XCTAssertEqual(vm.currentQuestion, 50)\n}"
+        },
+        {
+          "name": "testGoNextAtBoundary",
+          "description": "問題200でgoNextしても201にならない（上限制約）",
+          "code": "@MainActor\nfunc testGoNextAtBoundary() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    vm.goToQuestion(200)\n    vm.goNext()\n    XCTAssertEqual(vm.currentQuestion, 200)\n}"
+        },
+        {
+          "name": "testGoPreviousAtBoundary",
+          "description": "問題1でgoPreviousしても0にならない（下限制約）",
+          "code": "@MainActor\nfunc testGoPreviousAtBoundary() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    vm.goToQuestion(1)\n    vm.goPrevious()\n    XCTAssertEqual(vm.currentQuestion, 1)\n}"
+        },
+        {
+          "name": "testSelectChoiceUpdatesSheet",
+          "description": "selectChoice(\"A\")でsheet.userAnswers[currentQuestion-1]が\"A\"になる",
+          "code": "@MainActor\nfunc testSelectChoiceUpdatesSheet() {\n    var sheet = AnswerSheet(title: \"test\")\n    // 最初の問題に移動するため全て入力済みにして問題1に手動移動\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    vm.goToQuestion(1)\n    vm.selectChoice(\"A\")\n    XCTAssertEqual(vm.sheet.userAnswers[0], \"A\")\n}"
+        },
+        {
+          "name": "testToggleInputMode",
+          "description": "answerモードからtoggleInputModeするとcorrectモードになる",
+          "code": "@MainActor\nfunc testToggleInputMode() {\n    let sheet = AnswerSheet(title: \"test\")\n    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)\n    XCTAssertEqual(vm.inputMode, .answer)\n    vm.toggleInputMode()\n    XCTAssertEqual(vm.inputMode, .correct)\n    vm.toggleInputMode()\n    XCTAssertEqual(vm.inputMode, .answer)\n}"
+        }
+      ]
+    }
+  ],
+  "coverage_gaps": [
+    "DataManager.saveSheets/loadSheetsのUserDefaults実際の読み書き（UserDefaults.standardを直接使うため単体テストが困難）",
+    "タイマーの実際の経過時間カウント（Timer依存のため時間軸のテストが難しい）",
+    "moveToFirstUnanswered/moveToFirstUnansweredCorrectが全問回答済みの場合の挙動",
+    "finishAnswering/score/resumeAnsweringによるstatus遷移の一連のフロー",
+    "answerStatusメソッドのcurrent/answered/unanswered判定の網羅的テスト",
+    "PartScore.percentageでtotal=0の場合の0除算ガード",
+    "DataManager.averageScoreでscoredSheetsが空の場合のゼロ除算ガード（実装済みだが未テスト）"
+  ],
+  "recommendations": [
+    "DataManagerのテストにはUserDefaultsのsuiteName付きインスタンス（UserDefaults(suiteName: \"test\")）を使いテスト用DataManagerを生成する仕組みを作ると、本番データを汚さず保存・読み込みのテストが可能になる",
+    "AnswerSheetViewModelはDataManagerへの依存があるため、テスト用にDataManagerをDI可能な形に変更（またはprotocol化）することを検討する",
+    "タイマーテストはTimer依存をCombineのschedulerに差し替えられるよう設計を見直すことでテスタビリティが向上する",
+    "UIテスト（XCUITest）を追加し、200問グリッドのタップ操作や採点フローをE2Eで検証することを推奨する",
+    "まずスイート1（採点ロジック）と3（Codable往復）から着手することで、最も重要なデータ整合性を最短で保証できる"
+  ]
+}

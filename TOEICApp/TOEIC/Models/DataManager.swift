@@ -5,6 +5,8 @@ import Foundation
 import Combine
 
 // MARK: - データ管理クラス
+// @MainActor: @Published プロパティの更新を必ずメインスレッドで行うことを保証する（#3対応）
+@MainActor
 class DataManager: ObservableObject {
 
     static let shared = DataManager()

@@ -7,7 +7,7 @@ struct SheetDetailView: View {
 
     @EnvironmentObject var dataManager: DataManager
     @State var sheet: AnswerSheet
-    @State private var showAnswerInput = false
+    @State private var activeViewModel: AnswerSheetViewModel?  // VM を事前生成して保持
     @State private var showScoringResult = false
     @State private var showDeleteAlert = false
     @Environment(\.dismiss) private var dismiss
@@ -57,11 +57,10 @@ struct SheetDetailView: View {
         } message: {
             Text("この解答シートを削除します。この操作は元に戻せません。")
         }
-        .fullScreenCover(isPresented: $showAnswerInput) {
+        .fullScreenCover(item: $activeViewModel, onDismiss: {
             // カバーを閉じたらシートを再読み込み
             reloadSheet()
-        } content: {
-            let vm = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
+        }) { vm in
             AnswerInputView(viewModel: vm)
         }
         .sheet(isPresented: $showScoringResult) {
@@ -164,7 +163,7 @@ struct SheetDetailView: View {
             switch sheet.status {
             case .answering:
                 primaryButton(title: "回答を続ける", icon: "pencil") {
-                    showAnswerInput = true
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
 
             case .answered:
@@ -172,22 +171,23 @@ struct SheetDetailView: View {
                     // 正解入力モードに切り替えて開く
                     sheet.status = .scoring
                     dataManager.updateSheet(sheet)
-                    showAnswerInput = true
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
                 secondaryButton(title: "回答を修正する", icon: "pencil") {
                     sheet.status = .answering
                     dataManager.updateSheet(sheet)
-                    showAnswerInput = true
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
 
             case .scoring:
                 primaryButton(title: "正解入力を続ける", icon: "doc.text.magnifyingglass") {
-                    showAnswerInput = true
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
                 if sheet.isFullyCorrectAnswered {
                     primaryButton(title: "採点する", icon: "star.fill") {
                         sheet.status = .scored
                         dataManager.updateSheet(sheet)
+                        reloadSheet()  // DataManager と @State の sheet を同期
                         showScoringResult = true
                     }
                 }

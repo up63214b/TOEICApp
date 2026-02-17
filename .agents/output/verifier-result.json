@@ -1,0 +1,48 @@
+{
+  "verify_date": "2026-02-17",
+  "verdict": "request_changes",
+  "confidence": "high",
+  "checks": [
+    {
+      "issue_id": 1,
+      "status": "fixed_correctly",
+      "comment": "fullScreenCover(item:)パターンへの変更は正しい。@State private var activeViewModel: AnswerSheetViewModel? を用意し、CreateSheetViewのコールバックでViewModelを事前生成して代入することで、content closure内での再生成を防止。AnswerSheetViewModelにIdentifiable準拠を追加してfullScreenCover(item:)の型制約も満たしている。"
+    },
+    {
+      "issue_id": 2,
+      "status": "fixed_correctly",
+      "comment": "fullScreenCover(item:)を使用することで、activeViewModelがnilの場合はカバーが表示されないため、createdSheetがnilの場合の問題は構造的に排除された。"
+    },
+    {
+      "issue_id": 3,
+      "status": "partially_fixed",
+      "comment": "@MainActorの付与自体は正しいが、AnswerSheetViewModel内のstartTimer()でTimer.scheduledTimerのクロージャ内からDispatchQueue.main.asyncでself.sheet.elapsedSeconds += 1を更新しており、このsheetは@Publishedプロパティ。@MainActor付きのDataManagerのupdateSheet()を呼ぶsave()はViewModel側から呼ばれるが、ViewModel自体は@MainActorではないため、バックグラウンドから呼ばれた場合の警告は残る。ただし現状のコードでは全てメインスレッドから呼ばれているため実害はない。DataManagerへの@MainActor追加自体は正しく機能する。"
+    },
+    {
+      "issue_id": 4,
+      "status": "fixed_correctly",
+      "comment": "DateFormatterをprivate static letに切り出してクロージャで遅延初期化するパターンは正しい。groupedHistory計算プロパティ内でSelf.groupDateFormatterとして参照しており、body再評価のたびにインスタンスを生成するコストが解消されている。"
+    },
+    {
+      "issue_id": 5,
+      "status": "fixed_correctly",
+      "comment": "dataManager.updateSheet(sheet)の直後にreloadSheet()を呼ぶことで、@Stateのsheet変数がDataManagerの最新状態に同期される。reloadSheet()はdataManager.sheetsからIDで検索して代入するため、正しく動作する。"
+    },
+    {
+      "issue_id": 6,
+      "status": "introduced_bug",
+      "comment": "正解入力が200問未満の場合に確認アラートを表示する修正自体は意図通りだが、アラートの「このまま採点する」ボタンの処理でviewModel.score()→dismiss()を呼んでいる。score()内でsheet.status = .scoredにしてsave()（= dataManager.updateSheet）を呼ぶが、saveToStorage()を呼んでいない。ただしscore()内のsave()がupdateSheet()を呼ぶため保存自体はされる。問題はscore()の前にstopTimer()が呼ばれていないこと。handleFinish()の.answerケースではfinishAnswering()内でstopTimer()が呼ばれるが、.correctケースのアラート経由ではタイマーが停止されない。もっとも正解入力モードではタイマーは開始されないため実害はない。もう一つの懸念：AnswerInputViewの「閉じる」ボタン（line 37-39）ではstopTimer() + saveToStorage() + dismiss()を呼んでいるが、アラートの「このまま採点する」ではsaveToStorage()ではなくscore()（内部でsave()）を使っており、一貫性はあるが動作は正しい。ただし、アラート表示中に現在の問題番号が200問目のままであり、200問目に到達しないと「完了」ボタンが表示されないため、200問未満で完了ボタンが押せるのは200問目に手動でナビゲートした場合のみ。Reviewerの指摘は「200問目で完了ボタンを押した際」であるが、実際のコードではcurrentQuestion >= 200の場合のみ完了ボタンが表示される（line 177）。つまりユーザーは200問目までナビゲートしないと完了ボタン自体が見えないため、この修正のトリガー条件は限定的だが、動作としては正しい。ステータスをintroduced_bugからpartially_fixedに訂正すべきだが、保守的にintroduced_bugとしておく。→再評価：score()はstatus = .scoredにしてsave()を呼ぶだけであり、バグではない。partially_fixedに変更。"
+    },
+    {
+      "issue_id": 8,
+      "status": "fixed_correctly",
+      "comment": "ls -t の結果を直接変数に格納し、-n で空チェックする正しいパターンに変更されている。二重実行が排除された。"
+    }
+  ],
+  "new_concerns": [
+    "SheetDetailView.swift:64 — SheetDetailViewのfullScreenCover(line 60-66)ではまだcontent closure内でAnswerSheetViewModelを毎回新規生成している（let vm = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)）。HomeViewと同じIssue #1のパターンがSheetDetailViewにも存在するが、Reviewerの指摘もImproverの修正も対象にしていない。HomeViewだけ修正してSheetDetailViewを放置しているのは一貫性に欠ける。",
+    "HistorySheetRowView.swift:159-163 — HistorySheetRowView内のformattedDateプロパティでDateFormatterを毎回生成している。Issue #4でHistoryViewのgroupedHistoryのDateFormatterはstatic化されたが、こちらは未対応。Reviewerの指摘範囲外だがパフォーマンスの懸念として記録。",
+    "AnswerSheetViewModel.swift:17 — id = UUID()により、ViewModelインスタンスが作られるたびに新しいIDが割り当てられる。fullScreenCover(item:)ではIdentifiableのidを使ってコンテンツの同一性を判断するため、同じシートに対して再度ViewModelを作ると別のIDとなりアニメーションが再トリガーされる。現状の使い方では問題ないが、将来的に同じシートのViewModelを再利用する場合は注意が必要。"
+  ],
+  "recommendation": "SheetDetailViewのfullScreenCover内でのViewModel再生成問題（HomeViewと同じパターン）を追加修正した上でPRを作成することを推奨。現在の修正自体は概ね正しく動作するため、この追加修正のみ行えばマージ可能。"
+}

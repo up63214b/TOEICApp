@@ -106,16 +106,19 @@ struct HistoryView: View {
         .padding(.vertical, 4)
     }
 
+    // body 再評価のたびに生成しないよう static で1度だけインスタンス化（#4対応）
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy年MM月dd日"
+        f.locale = Locale(identifier: "ja_JP")
+        return f
+    }()
+
     // 日付グループ
     private var groupedHistory: [(String, [AnswerSheet])] {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月dd日"
-        formatter.locale = Locale(identifier: "ja_JP")
-
         let grouped = Dictionary(grouping: dataManager.scoredSheets) { sheet in
-            formatter.string(from: sheet.createdAt)
+            Self.dateFormatter.string(from: sheet.createdAt)
         }
-
         return grouped.sorted { $0.key > $1.key }
     }
 }

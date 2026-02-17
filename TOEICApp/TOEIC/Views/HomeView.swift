@@ -7,8 +7,8 @@ struct HomeView: View {
 
     @EnvironmentObject var dataManager: DataManager
     @State private var showCreateSheet = false
-    @State private var createdSheet: AnswerSheet?
-    @State private var showAnswerInput = false
+    // VM を事前生成して保持することで、fullScreenCover 内での毎回再生成を防ぐ（#1/#2対応）
+    @State private var activeViewModel: AnswerSheetViewModel?
 
     var body: some View {
         NavigationStack {
@@ -32,15 +32,13 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showCreateSheet) {
                 CreateSheetView { sheet in
-                    createdSheet = sheet
-                    showAnswerInput = true
+                    // VM を sheet 確定時に1回だけ生成してセット → 自動で fullScreenCover が開く
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
             }
-            .fullScreenCover(isPresented: $showAnswerInput) {
-                if let sheet = createdSheet {
-                    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                    AnswerInputView(viewModel: vm)
-                }
+            // item が non-nil になると自動表示、dismiss 時に nil にリセットされる
+            .fullScreenCover(item: $activeViewModel) { vm in
+                AnswerInputView(viewModel: vm)
             }
         }
     }
@@ -96,7 +94,11 @@ struct HomeView: View {
             // 最近の採点済みシート（最大5件）
             let recentScored = Array(dataManager.scoredSheets.prefix(5))
             if !recentScored.isEmpty {
-                Section("最近の採点済み") {
+                // 6件以上ある場合は「全件は履歴タブへ」を案内する（#9対応）
+                let sectionTitle = dataManager.scoredSheets.count > 5
+                    ? "最近の採点済み（全件は履歴タブへ）"
+                    : "最近の採点済み"
+                Section(sectionTitle) {
                     ForEach(recentScored) { sheet in
                         NavigationLink(destination: SheetDetailView(sheet: sheet)) {
                             ScoredSheetRowView(sheet: sheet)

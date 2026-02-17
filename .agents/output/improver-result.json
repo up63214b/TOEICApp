@@ -1,0 +1,49 @@
+{
+  "improve_date": "2026-02-17",
+  "fixed_issues": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8
+  ],
+  "skipped_issues": [
+    7,
+    9,
+    10
+  ],
+  "changes": [
+    {
+      "file": "TOEICApp/TOEIC/Views/HomeView.swift",
+      "description": "fullScreenCover(item:)パターンに変更。ViewModelを事前生成して@Stateで保持することで、content closure内での毎回再生成とcreatedSheetがnilの場合の問題を同時に解決"
+    },
+    {
+      "file": "TOEICApp/TOEIC/ViewModels/AnswerSheetViewModel.swift",
+      "description": "Identifiableプロトコルに準拠を追加（fullScreenCover(item:)で使用するため）。id: UUIDプロパティを追加"
+    },
+    {
+      "file": "TOEICApp/TOEIC/Models/DataManager.swift",
+      "description": "@MainActorを付与し、@Publishedプロパティの更新がメインスレッドで行われることを保証"
+    },
+    {
+      "file": "TOEICApp/TOEIC/Views/HistoryView.swift",
+      "description": "groupedHistory内で毎回生成していたDateFormatterをstatic letに変更し、body再評価時のインスタンス生成コストを削減"
+    },
+    {
+      "file": "TOEICApp/TOEIC/Views/SheetDetailView.swift",
+      "description": "採点ボタン押下時にdataManager.updateSheet(sheet)の直後にreloadSheet()を呼び、ローカルのsheet変数とDataManagerの不整合を防止"
+    },
+    {
+      "file": "TOEICApp/TOEIC/Views/AnswerInputView.swift",
+      "description": "正解入力モードで200問未満の場合に確認アラートを表示。誤操作で途中状態のまま画面が閉じることを防止"
+    },
+    {
+      "file": "scripts/ai-agents/setup.sh",
+      "description": "do_status関数内のls二重実行を排除。結果を直接変数に格納して空チェックで分岐するパターンに修正"
+    }
+  ],
+  "risk_assessment": "low",
+  "notes": "Issue #7（タイマー重複起動リスク）は既存のguardで防止されており実害なしのためスキップ。Issue #9（採点済み5件制限の案内）とIssue #10（PartScoreのダミーpart引数）はseverity=infoのためスキップ。@MainActor追加により、DataManagerをバックグラウンドスレッドから直接呼んでいる箇所があればコンパイルエラーになる可能性があるが、現状のコードでは全てメインスレッドから呼ばれているため問題なし。Xcodeビルド確認を推奨。"
+}
