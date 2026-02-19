@@ -18,12 +18,31 @@
 - #7 AnswerInputView: startTimer() の onAppear にコメント追加
 - #9 HomeView: 採点済み5件制限のヘッダー案内を追加
 
+## エージェント設定レビュー・修正（2026-02-19完了）
+- reviewer.md: レビュー対象を .agents/ 配下に更新、TOEICドメイン知識追加、前回結果参照ルール修正
+- improver.md: 追加指示の参照元明記、info修正の緩和、自信がない場合のskipルール追加
+- verifier.md: verdict判定基準を明示、保守的判定ルール追加、構文検証の正直な記述、new_concerns対応定義
+- ux-analyst.md: コード推測の注記追加、HIG準拠の観点追加、measurement フィールド追加
+- test-writer.md: TOEIC固有テスト対象追記、ViewInspector削除しXCTest限定、配置先明記、テストターゲット作成提案
+- feature-proposer.md: 現在の機能一覧追加、effort_estimate基準明示、next_steps フィールド追加
+- config.sh: IMPROVER_INSTRUCTION を空にし improver.md に一元化、verifier単体モード追加、タイムアウト設定追加
+- CLAUDE.md 新規作成（プロジェクト固有ルール・アーキテクチャ・ドメイン知識）
+- lessons.md 新規作成（初期教訓3件）
+- runner.sh: 空出力バリデーション追加
+
+## プロジェクト構造整理（2026-02-19完了）
+- scripts/ai-agents/ 削除（旧AIエージェントシステムを完全削除）
+- .agents/output/ の蓄積ファイルをクリア、.gitignore に追加
+- Xcode プロジェクトをフラット化: TOEICApp/TOEICApp/{TOEIC.xcodeproj, TOEIC/} → TOEICApp/{TOEIC.xcodeproj, TOEIC/}
+- xcodebuild -list で動作確認済み
+
 ## 現在作業中（In Progress）
 - なし
 
 ## 次にやること（Next）
 - Xcodeでビルド確認（AIレビュー修正適用後）
 - 残りのinfo指摘（#10: listeningScore/readingScore のPartScore分離）は検討中
+- エージェントシステムの実行テスト（修正後の動作確認）
 
 ---
-最終更新: 2026-02-17
+最終更新: 2026-02-19

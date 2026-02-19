@@ -56,3 +56,6 @@ playground.xcworkspace
 
 # SwiftLint
 .swiftlint.yml.bak
+
+# AI エージェントの出力ファイル（ログ・結果ファイルは Git 管理外）
+.agents/output/

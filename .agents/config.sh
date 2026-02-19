@@ -14,13 +14,13 @@ PROMPTS_DIR="$PROJECT_DIR/.agents/prompts"                           # プロン
 MODEL_LIGHT="claude-sonnet-4-5-20250929"  # 軽量タスク（reviewer, ux-analyst など）
 MODEL_HEAVY="claude-opus-4-6"             # 重量タスク（improver, verifier）
 
+# --- タイムアウト設定（秒） ---
+TIMEOUT_SECONDS=300  # 各エージェントの最大実行時間
+
 # --- Improver への追加指示 ---
-# runner.sh の _run_improver() から参照される
-IMPROVER_INSTRUCTION="上記の指摘事項に基づいて、$PROJECT_DIR 内の Swift ファイルを直接修正してください。
-修正が完了したら、修正サマリーを JSON 形式で出力してください。
-- severity=error の指摘を最優先で修正する
-- 修正は最小限にする（関係ないコードを変更しない）
-- 修正箇所には // AI改善: 簡潔な説明 のコメントを残す"
+# 基本指示は prompts/improver.md に一元化済み。
+# プロジェクト固有の追加指示が必要な場合のみここに記載する。
+IMPROVER_INSTRUCTION=""
 
 # --- パイプライン定義 ---
 # 引数: モード名（review / dry-run / improve / all / ux / test / feature）
@@ -45,6 +45,9 @@ get_pipeline() {
             ;;
         feature)
             echo "feature-proposer"
+            ;;
+        verify|verifier)
+            echo "verifier"
             ;;
         *)
             return 1  # 不明なモード → run.sh が error_exit を呼ぶ
