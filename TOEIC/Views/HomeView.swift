@@ -18,6 +18,10 @@ struct HomeView: View {
     @State private var showingCreateSheet = false
     @State private var showingStatistics = false
     @State private var activeViewModel: AnswerSheetViewModel?
+    
+    // エラーハンドリング用
+    @State private var errorMessage: String?
+    @State private var showingErrorAlert = false
 
     var body: some View {
         NavigationStack {
@@ -55,6 +59,11 @@ struct HomeView: View {
             }
             .fullScreenCover(item: $activeViewModel) { vm in
                 AnswerInputView(viewModel: vm)
+            }
+            .alert("エラー", isPresented: $showingErrorAlert, presenting: errorMessage) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { message in
+                Text(message)
             }
         }
     }
@@ -140,7 +149,8 @@ struct HomeView: View {
         do {
             try modelContext.save()
         } catch {
-            print("Failed to save: \(error)")
+            errorMessage = "データの削除に失敗しました: \(error.localizedDescription)"
+            showingErrorAlert = true
         }
     }
 }
