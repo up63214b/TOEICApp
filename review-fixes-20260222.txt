@@ -1,0 +1,52 @@
+## Claude Code レビュー修正内容 (2026-02-22)
+
+以下の修正を実施しました。今後の作業で同じ問題を再発させないよう参考にしてください。
+
+---
+
+### 1. [ビルドエラー] @Published let → var
+- ファイル: AnswerSheetViewModel.swift:18
+- 修正: `@Published let sheet` → `@Published var sheet`
+- 理由: @Published プロパティラッパーは var でなければコンパイルエラーになる。
+  同様に @Bindable, @State, @Binding も必ず var にすること。
+
+### 2. [重大バグ] scorePercentage が常に 0.0 を返していた
+- ファイル: AnswerSheet.swift:36-40
+- 修正前: listeningScore / readingScore (Optional<Int>) をベースに計算していたが、
+  プロジェクト内のどこにもこれらに値を代入するコードがなく、常に nil → 常に 0.0
+- 修正後: totalCorrect / (回答済み問題数) * 100 で計算するように変更
+- 影響: ScoringResultView, HistoryView, StatisticsView, SheetDetailView すべてのスコア表示が壊れていた
+
+### 3. [重大バグ] percentage の値域不一致 (0.0-1.0 vs 0-100)
+- PartScore.percentage が 0.0〜1.0 を返していたが、チャートのY軸ドメインが 0...100、
+  barColor/mainScoreColor の比較も 80...100 等で書かれていたため、全く噛み合っていなかった
+- 修正:
+  - AnswerSheet.swift: PartScore.percentage を * 100 して 0〜100 に統一
+  - AnswerSheet.swift: scorePercentage も 0〜100 に統一
+  - HistoryView.swift: averageScore の * 100 を削除、scorePercentage * 100 を削除
+  - ScoringResultView.swift: Circle().trim() に / 100 を追加 (0〜1 が必要な箇所)
+  - ScoringResultView.swift: プログレスバー幅に min(..., 1.0) ガード追加
+  - StatisticsView.swift: averageScore の * 100 を削除、scoreHistory の * 100 を削除
+
+### 4. [ロジックバグ] 正解入力モードのページ自動送り・ジャンプが誤っていた
+- ファイル: AnswerSheetViewModel.swift
+- selectChoice() のページ自動送り:
+  修正前: .correct モードでも selectedOption (ユーザー回答) をチェックしていた
+  修正後: inputMode に応じて selectedOption / correctOption を使い分けるように変更
+- moveToFirstUnansweredCorrect():
+  修正前: selectedOption == nil で検索 (ユーザー回答の未入力を探していた)
+  修正後: correctOption == nil で検索 (正解の未入力を探すように修正)
+
+### 5. [軽微] print の文字列補間が壊れていた
+- ファイル: CreateSheetView.swift:57, SettingsView.swift:66
+- 修正: `print("Failed to save: (error)")` → `print("Failed to save: \(error)")`
+- バックスラッシュが抜けていたため、実際のエラー内容がログに出力されていなかった
+
+---
+
+### 注意事項 (今後の開発で守ること)
+
+1. プロパティラッパー (@Published, @Bindable, @State, @Binding) は必ず var にする
+2. percentage 系の値域は 0〜100 で統一されている。0〜1 が必要な箇所 (Circle.trim 等) では / 100 する
+3. scorePercentage は totalCorrect ベースで計算している。listeningScore / readingScore は現在未使用
+4. inputMode が .answer か .correct かで参照すべきフィールドが異なる (selectedOption vs correctOption)

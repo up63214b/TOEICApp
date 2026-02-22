@@ -48,32 +48,26 @@ struct AnswerInputView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 16) {
-                        // 正解表示トグル
+                        // 回答 / 正解入力モード切り替えトグル
+                        Button {
+                            withAnimation {
+                                if viewModel.inputMode == .answer {
+                                    viewModel.inputMode = .correct
+                                } else {
+                                    viewModel.inputMode = .answer
+                                }
+                            }
+                        } label: {
+                            Image(systemName: viewModel.inputMode == .answer ? "pencil.circle" : "checkmark.circle.fill")
+                                .foregroundColor(viewModel.inputMode == .answer ? .blue : .green)
+                        }
+                        
+                        // 正解を表示して確認するトグル（目のアイコン）
                         Button {
                             showCorrectAnswers.toggle()
                         } label: {
                             Image(systemName: showCorrectAnswers ? "eye.fill" : "eye.slash")
                                 .foregroundColor(showCorrectAnswers ? .green : .secondary)
-                        }
-                        
-                        // 表示数切り替えメニュー（回答入力モードのみ表示）
-                        if viewModel.inputMode == .answer {
-                            Menu {
-                                ForEach([1, 3, 5, 10], id: \.self) { count in
-                                    Button {
-                                        viewModel.questionsPerPage = count
-                                    } label: {
-                                        HStack {
-                                            Text("\(count)問ずつ表示")
-                                            if viewModel.questionsPerPage == count {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: "list.bullet.indent")
-                            }
                         }
 
                         Button {
@@ -156,13 +150,13 @@ struct AnswerInputView: View {
     // MARK: - 問題セクション
     private var questionSection: some View {
         ScrollView {
-            VStack(spacing: viewModel.inputMode == .correct ? 12 : 24) {
+            VStack(spacing: 24) {
                 ForEach(viewModel.currentQuestionRange, id: \.self) { qNumber in
-                    if viewModel.inputMode == .correct {
-                        correctInputRow(for: qNumber)
-                    } else {
-                        questionRow(for: qNumber)
-                    }
+                    questionRow(for: qNumber)
+                }
+            }
+            .padding(.horizontal)
+        }
                 }
             }
             .padding(.horizontal)
@@ -183,35 +177,6 @@ struct AnswerInputView: View {
         )
     }
 
-    // 正解入力用のコンパクトな行
-    private func correctInputRow(for qNumber: Int) -> some View {
-        let isCurrent = viewModel.currentQuestion == qNumber
-        let index = qNumber - 1
-        let answer = viewModel.sheet.answers[index].selectedOption
-        let correct = viewModel.sheet.answers[index].correctOption
-        let labels = TOEICTemplate.choiceLabels(for: qNumber)
-
-        return HStack(spacing: 12) {
-            Text("Q\(qNumber)")
-                .font(.system(.body, design: .monospaced))
-                .fontWeight(isCurrent ? .bold : .medium)
-                .frame(width: 45, alignment: .leading)
-                .foregroundColor(isCurrent ? .blue : .primary)
-
-            HStack(spacing: 8) {
-                ForEach(labels, id: \.self) { choice in
-                    Button {
-                        viewModel.currentQuestion = qNumber
-                        viewModel.selectChoice(choice)
-                    } label: {
-                        Text(choice)
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 38)
-                            .background(correct == choice ? Color.green : Color(.systemGray5))
-                            .foregroundColor(correct == choice ? .white : .primary)
-                            .cornerRadius(8)
-                    }
                 }
             }
         }
@@ -230,12 +195,14 @@ struct AnswerInputView: View {
         let answer = viewModel.sheet.answers[index].selectedOption
         let correct = viewModel.sheet.answers[index].correctOption
         let labels = TOEICTemplate.choiceLabels(for: qNumber)
+        
+        let isMultiSet = (32...100).contains(qNumber)
 
         return VStack(spacing: 12) {
             HStack {
                 Text("Q\(qNumber)")
-                    .font(.system(size: isCurrent ? 32 : 24, weight: .bold, design: .rounded))
-                    .foregroundColor(isCurrent ? .primary : .secondary)
+                    .font(.system(size: isMultiSet ? 24 : (isCurrent ? 32 : 24), weight: .bold, design: .rounded))
+                    .foregroundColor(isCurrent ? .blue : .secondary)
                 
                 Spacer()
                 
@@ -243,19 +210,10 @@ struct AnswerInputView: View {
                     // 正答確認モード
                     HStack(spacing: 8) {
                         if let answer = answer, let correct = correct {
-                            // 実際の○×判定
                             Image(systemName: answer == correct ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundColor(answer == correct ? .green : .red)
                                 .font(.headline)
-                        } else if let _ = correct {
-                            Text("(未回答)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
                         }
-                        
-                        Text("正解:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                         
                         if let correct = correct {
                             Text(correct)
@@ -267,8 +225,9 @@ struct AnswerInputView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                } else if let answer = answer {
-                    Text(answer)
+                } else if !isMultiSet && answer != nil {
+                    // 単一表示かつ回答済みの場合のみ丸を表示
+                    Text(answer!)
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)
@@ -284,13 +243,17 @@ struct AnswerInputView: View {
                 }
             }
 
-            if isCurrent {
-                VStack(spacing: 12) {
+            // 選択肢の表示ロジック
+            // Q32-100 (isMultiSet) の場合は常に表示。それ以外は isCurrent の場合のみ。
+            if isMultiSet || isCurrent {
+                VStack(spacing: 8) {
                     HStack(spacing: 12) {
                         ForEach(labels, id: \.self) { choice in
+                            let isSelected = (viewModel.inputMode == .answer ? answer : correct) == choice
+                            
                             ChoiceButton(
                                 label: choice,
-                                isSelected: answer == choice,
+                                isSelected: isSelected,
                                 action: {
                                     viewModel.currentQuestion = qNumber
                                     viewModel.selectChoice(choice)
@@ -299,10 +262,12 @@ struct AnswerInputView: View {
                         }
                     }
                     
-                    if showCorrectAnswers {
-                        Text("※正解をタップして入力（開発中）")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
+                    if isMultiSet && isCurrent {
+                        // 3問セットのときはどれを選択中か分かりやすくアンダーライン
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(height: 2)
+                            .padding(.horizontal, 4)
                     }
                 }
                 .transition(.opacity.combined(with: .scale))

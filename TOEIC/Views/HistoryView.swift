@@ -3,6 +3,7 @@
 
 import SwiftUI
 import SwiftData
+import Charts
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -16,7 +17,14 @@ struct HistoryView: View {
     private var averageScore: Double {
         guard !scoredSheets.isEmpty else { return 0 }
         let total = scoredSheets.reduce(0.0) { $0 + $1.scorePercentage }
-        return (total / Double(scoredSheets.count)) * 100
+        return total / Double(scoredSheets.count)
+    }
+    
+    private var scoreHistoryForChart: [(index: Int, score: Double)] {
+        // グラフは左から右へ時系列順にしたいので、古いものから並べる
+        scoredSheets.reversed().enumerated().map { (index, sheet) in
+            (index: index + 1, score: sheet.scorePercentage)
+        }
     }
 
     var body: some View {
@@ -53,7 +61,7 @@ struct HistoryView: View {
     private var historyList: some View {
         List {
             Section(header: Text("統計")) {
-                statisticsCard
+                statisticsSection
             }
             
             ForEach(groupedSheets, id: \.key) { month, sheets in
@@ -68,13 +76,47 @@ struct HistoryView: View {
         }
     }
 
-    private var statisticsCard: some View {
-        HStack {
-            statisticItem(title: "受験数", value: "\(scoredSheets.count)", color: .blue)
-            Divider()
-            statisticItem(title: "平均正解率", value: String(format: "%.0f%%", averageScore), color: .green)
+    private var statisticsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                statisticItem(title: "受験数", value: "\(scoredSheets.count)", color: .blue)
+                Divider()
+                statisticItem(title: "平均正解率", value: String(format: "%.0f%%", averageScore), color: .green)
+            }
+            
+            if scoredSheets.count >= 2 {
+                scoreTrendChart
+            }
         }
         .padding(.vertical, 8)
+    }
+    
+    private var scoreTrendChart: some View {
+        VStack(alignment: .leading) {
+            Text("スコア推移")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Chart {
+                ForEach(scoreHistoryForChart, id: \.index) { data in
+                    LineMark(
+                        x: .value("回数", data.index),
+                        y: .value("正解率", data.score)
+                    )
+                    .foregroundStyle(Color.green.gradient)
+                    
+                    AreaMark(
+                        x: .value("回数", data.index),
+                        y: .value("正解率", data.score)
+                    )
+                    .foregroundStyle(Color.green.opacity(0.1).gradient)
+                }
+            }
+            .frame(height: 100)
+            .chartYScale(domain: 0...100)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+        }
     }
 
     private func statisticItem(title: String, value: String, color: Color) -> some View {
@@ -140,7 +182,7 @@ struct HistoryRowView: View {
                 Text("\(sheet.totalCorrect) / 200")
                     .font(.headline)
                     .foregroundColor(.blue)
-                Text(String(format: "%.1f%%", sheet.scorePercentage * 100))
+                Text(String(format: "%.1f%%", sheet.scorePercentage))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

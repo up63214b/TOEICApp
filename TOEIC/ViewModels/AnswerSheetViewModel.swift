@@ -15,19 +15,19 @@ enum InputMode {
 @MainActor
 class AnswerSheetViewModel: ObservableObject, Identifiable {
 
-    @Published let sheet: AnswerSheet
+    @Published var sheet: AnswerSheet
     @Published var currentQuestion: Int = 1
     @Published var inputMode: InputMode = .answer
     @Published var isTimerRunning: Bool = false
     @Published var showGrid: Bool = false
     
-    // 表示問題数の設定 (1, 3, 5, 10など)
-    @Published var questionsPerPage: Int = 3
-    
-    // 現在のモードに応じた実質的な表示数
+    // 現在の問題番号に応じた実質的な表示数
     var effectiveQuestionsPerPage: Int {
-        // .correctモード（正解入力時）は10問ずつ、それ以外はユーザー設定に従う
-        inputMode == .correct ? 10 : questionsPerPage
+        if (32...100).contains(currentQuestion) {
+            return 3
+        } else {
+            return 1
+        }
     }
 
     private var timer: Timer?
@@ -124,9 +124,12 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         // 複数問題表示の場合の自動遷移ロジック
         if effectiveQuestionsPerPage > 1 {
             let range = currentQuestionRange
-            // ページ内の全問題が回答済みかチェック
+            // ページ内の全問題が入力済みかチェック
             let allAnswered = range.allSatisfy { q in
-                sheet.answers[q-1].selectedOption != nil
+                switch inputMode {
+                case .answer:  sheet.answers[q-1].selectedOption != nil
+                case .correct: sheet.answers[q-1].correctOption != nil
+                }
             }
             
             if allAnswered && range.upperBound < TOEICTemplate.totalQuestions {
@@ -181,8 +184,7 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     func moveToFirstUnansweredCorrect() {
-        // 正解入力のロジックは Answer 構造体の拡張が必要
-        if let index = sheet.answers.firstIndex(where: { $0.selectedOption == nil }) {
+        if let index = sheet.answers.firstIndex(where: { $0.correctOption == nil }) {
             currentQuestion = index + 1
         }
     }

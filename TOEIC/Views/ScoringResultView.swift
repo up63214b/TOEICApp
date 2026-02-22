@@ -64,7 +64,7 @@ struct ScoringResultView: View {
                     .frame(width: 160, height: 160)
 
                 Circle()
-                    .trim(from: 0, to: sheet.scorePercentage)
+                    .trim(from: 0, to: sheet.scorePercentage / 100)
                     .stroke(mainScoreColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .frame(width: 160, height: 160)
                     .rotationEffect(.degrees(-90))
@@ -76,6 +76,7 @@ struct ScoringResultView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Text(String(format: "%.1f%%", sheet.scorePercentage))
+
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(mainScoreColor)
@@ -166,6 +167,7 @@ struct ScoringResultView: View {
                 .fontWeight(.bold)
 
             Text(String(format: "%.1f%%", score.percentage))
+
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -214,7 +216,7 @@ struct ScoringResultView: View {
 
                     RoundedRectangle(cornerRadius: 4)
                         .fill(barColor(for: partScore.percentage))
-                        .frame(width: geometry.size.width * (partScore.percentage / 100), height: 8)
+                        .frame(width: geometry.size.width * min(partScore.percentage / 100, 1.0), height: 8)
                 }
             }
             .frame(height: 8)

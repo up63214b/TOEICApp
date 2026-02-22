@@ -63,6 +63,6 @@ struct SettingsView: View {
         for sheet in sheets {
             modelContext.delete(sheet)
         }
-        do { try modelContext.save() } catch { print("Failed to save: (error)") }
+        do { try modelContext.save() } catch { print("Failed to save: \(error)") }
     }
 }

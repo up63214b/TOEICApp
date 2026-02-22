@@ -54,6 +54,6 @@ struct CreateSheetView: View {
         let finalTitle = title.isEmpty ? "TOEIC解答シート" : title
         let sheet = AnswerSheet(title: finalTitle, inputOrder: inputOrder)
         modelContext.insert(sheet)
-        do { try modelContext.save() } catch { print("Failed to save: (error)") }
+        do { try modelContext.save() } catch { print("Failed to save: \(error)") }
     }
 }

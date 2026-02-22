@@ -34,9 +34,10 @@ final class AnswerSheet {
     
     // MARK: - 計算プロパティ
     var scorePercentage: Double {
-        guard status == .scored, let listening = listeningScore, let reading = readingScore else { return 0.0 }
-        let totalScore = listening + reading
-        return Double(totalScore) / 990.0
+        guard status == .scored else { return 0.0 }
+        let answered = answers.filter { $0.selectedOption != nil && $0.correctOption != nil }.count
+        guard answered > 0 else { return 0.0 }
+        return Double(totalCorrect) / Double(answered) * 100
     }
 
     var answeredCount: Int {
@@ -181,7 +182,7 @@ struct PartScore: Codable, Identifiable {
     let part: TOEICPart
     let correct: Int
     let total: Int
-    var percentage: Double { total == 0 ? 0 : Double(correct) / Double(total) }
+    var percentage: Double { total == 0 ? 0 : Double(correct) / Double(total) * 100 }
 }
 
 struct WrongAnswer: Codable, Identifiable {
