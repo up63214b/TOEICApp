@@ -10,6 +10,7 @@ final class AnswerSheet {
     @Attribute(.unique) var id: UUID
     var title: String
     var createdAt: Date
+    var formattedDate: String { createdAt.formatted(date: .numeric, time: .omitted) }
     var status: Status {
         didSet {
             statusRaw = status.rawValue
