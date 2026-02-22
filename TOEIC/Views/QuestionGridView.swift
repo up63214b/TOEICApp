@@ -15,7 +15,9 @@ struct QuestionGridView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        ForEach(TOEICTemplate.partRanges, id: \.part) { part, range in
+                        ForEach(TOEICTemplate.partRanges, id: \.part) { item in
+                        let part = item.part
+                        let range = item.range
                             partSection(part: part, range: range)
                         }
                     }
@@ -92,6 +94,6 @@ struct QuestionGridView: View {
 
 #Preview {
     let sheet = AnswerSheet(title: "テスト")
-    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)
+    let vm = AnswerSheetViewModel(sheet: sheet)
     QuestionGridView(viewModel: vm)
 }

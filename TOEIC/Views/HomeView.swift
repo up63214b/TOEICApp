@@ -1,232 +1,169 @@
 // HomeView.swift
-// TOEICApp - ホーム画面（解答シート一覧）
+// TOEICApp - 解答シート一覧 (SwiftData対応)
 
 import SwiftUI
+import SwiftData
 
 struct HomeView: View {
-
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showCreateSheet = false
-    // VM を事前生成して保持することで、fullScreenCover 内での毎回再生成を防ぐ（#1/#2対応）
+    @Environment(\.modelContext) private var modelContext
+    
+    // 実施中（採点済みでない）シートを取得
+    @Query(filter: #Predicate<AnswerSheet> { $0.statusRaw != 3 }, sort: \AnswerSheet.createdAt, order: .reverse)
+    private var activeSheets: [AnswerSheet]
+    
+    // 採点済みシートを取得
+    @Query(filter: #Predicate<AnswerSheet> { $0.statusRaw == 3 }, sort: \AnswerSheet.createdAt, order: .reverse)
+    private var scoredSheets: [AnswerSheet]
+    
+    @State private var showingCreateSheet = false
     @State private var activeViewModel: AnswerSheetViewModel?
 
     var body: some View {
         NavigationStack {
-            Group {
-                if dataManager.activeSheets.isEmpty && dataManager.scoredSheets.isEmpty {
+            ZStack {
+                if activeSheets.isEmpty && scoredSheets.isEmpty {
                     emptyView
                 } else {
-                    sheetListView
+                    sheetList
                 }
+                
+                floatingActionButton
             }
-            .navigationTitle("TOEIC解答シート")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
+            .navigationTitle("TOEIC 解答シート")
+            .sheet(isPresented: $showingCreateSheet) {
+                CreateSheetView()
             }
-            .sheet(isPresented: $showCreateSheet) {
-                CreateSheetView { sheet in
-                    // VM を sheet 確定時に1回だけ生成してセット → 自動で fullScreenCover が開く
-                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                }
-            }
-            // item が non-nil になると自動表示、dismiss 時に nil にリセットされる
             .fullScreenCover(item: $activeViewModel) { vm in
                 AnswerInputView(viewModel: vm)
             }
         }
     }
 
-    // MARK: - 空の状態
-    private var emptyView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "doc.text.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.gray.opacity(0.5))
-
-            Text("解答シートがありません")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("「+」ボタンをタップして\n新しい解答シートを作成しましょう")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                showCreateSheet = true
-            } label: {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text("解答シートを作成")
-                }
-                .fontWeight(.semibold)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-            }
-        }
-    }
-
-    // MARK: - シートリスト
-    private var sheetListView: some View {
+    private var sheetList: some View {
         List {
-            // 進行中のシート
-            if !dataManager.activeSheets.isEmpty {
-                Section("進行中") {
-                    ForEach(dataManager.activeSheets) { sheet in
-                        NavigationLink(destination: SheetDetailView(sheet: sheet)) {
-                            SheetRowView(sheet: sheet)
-                        }
+            if !activeSheets.isEmpty {
+                Section(header: Text("実施中")) {
+                    ForEach(activeSheets) { sheet in
+                        SheetRowView(sheet: sheet)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+                            }
                     }
                     .onDelete(perform: deleteActiveSheets)
                 }
             }
-
-            // 最近の採点済みシート（最大5件）
-            let recentScored = Array(dataManager.scoredSheets.prefix(5))
-            if !recentScored.isEmpty {
-                // 6件以上ある場合は「全件は履歴タブへ」を案内する（#9対応）
-                let sectionTitle = dataManager.scoredSheets.count > 5
-                    ? "最近の採点済み（全件は履歴タブへ）"
-                    : "最近の採点済み"
-                Section(sectionTitle) {
+            
+            if !scoredSheets.isEmpty {
+                let recentScored = Array(scoredSheets.prefix(5))
+                Section(header: scoredHeader(count: scoredSheets.count)) {
                     ForEach(recentScored) { sheet in
                         NavigationLink(destination: SheetDetailView(sheet: sheet)) {
-                            ScoredSheetRowView(sheet: sheet)
+                            SheetRowView(sheet: sheet)
                         }
                     }
                 }
             }
         }
-        .listStyle(.insetGrouped)
+    }
+    
+    private func scoredHeader(count: Int) -> some View {
+        HStack {
+            Text("最近の採点済み")
+            if count > 5 {
+                Spacer()
+                Text("ほか \(count - 5) 件は履歴へ")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "doc.text.badge.plus")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            Text("解答シートがありません")
+                .font(.headline)
+            Text("右下のボタンから新しいシートを作成しましょう")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var floatingActionButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    showingCreateSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title.bold())
+                        .foregroundColor(.white)
+                        .frame(width: 60, height: 60)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
+                }
+                .padding()
+            }
+        }
     }
 
     private func deleteActiveSheets(at offsets: IndexSet) {
         for index in offsets {
-            let sheet = dataManager.activeSheets[index]
-            dataManager.deleteSheet(sheet)
+            modelContext.delete(activeSheets[index])
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save: \(error)")
         }
     }
 }
 
-// MARK: - シート行（進行中）
+// MARK: - 行表示用View
 struct SheetRowView: View {
     let sheet: AnswerSheet
-
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(sheet.title)
+                    .font(.headline)
+                Text(sheet.createdAt, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            statusBadge
+        }
+        .padding(.vertical, 4)
+    }
+    
+    private var statusBadge: some View {
+        Text(sheet.status.label)
+            .font(.caption.bold())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(statusColor.opacity(0.2))
+            .foregroundColor(statusColor)
+            .clipShape(Capsule())
+    }
+    
     private var statusColor: Color {
         switch sheet.status {
-        case .answering:    return .blue
-        case .answered:     return .orange
-        case .scoring:      return .purple
-        case .scored:       return .green
+        case .answering: return .blue
+        case .answered: return .green
+        case .scoring: return .orange
+        case .scored: return .secondary
         case .correctInput: return .purple
         case .correctReady: return .orange
         }
     }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            // ステータスアイコン
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Text("\(sheet.answeredCount)")
-                    .font(.system(.caption, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundColor(statusColor)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(sheet.title)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Text(sheet.status.label)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(statusColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(statusColor.opacity(0.12))
-                        .cornerRadius(4)
-
-                    Text("\(sheet.answeredCount)/200問")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if sheet.elapsedSeconds > 0 {
-                        Text(sheet.formattedTime)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-// MARK: - シート行（採点済み）
-struct ScoredSheetRowView: View {
-    let sheet: AnswerSheet
-
-    var scoreColor: Color {
-        switch sheet.scorePercentage {
-        case 80...100: return .green
-        case 60..<80:  return .orange
-        default:       return .red
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 14) {
-            // スコアサークル
-            ZStack {
-                Circle()
-                    .fill(scoreColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Text(String(format: "%.0f", sheet.scorePercentage))
-                    .font(.system(.caption, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundColor(scoreColor)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(sheet.title)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Text("\(sheet.totalCorrect)/200問正解")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if sheet.elapsedSeconds > 0 {
-                        Text(sheet.formattedTime)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-#Preview {
-    HomeView()
-        .environmentObject(DataManager.shared)
 }

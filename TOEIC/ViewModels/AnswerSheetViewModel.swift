@@ -30,7 +30,7 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         switch sheet.status {
         case .answering:
             inputMode = .answer
-        case .answered, .scoring, .scored:
+        case .answered, .scoring, .scored, .correctInput, .correctReady:
             inputMode = .correct
         }
 
@@ -43,10 +43,24 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     deinit {
-        // stopTimer() // MainActor isolation issue in deinit
+        // Timer should be stopped by the View (onDisappear) to ensure main thread safety.
+        // stopTimer() cannot be called here due to MainActor isolation.
+        timer?.invalidate()
     }
 
     // MARK: - 現在の問題情報
+
+    var currentQuestionRange: ClosedRange<Int> {
+        if TOEICTemplate.multiQuestionRange.contains(currentQuestion) {
+            let startBase = TOEICTemplate.multiQuestionRange.lowerBound
+            let offset = (currentQuestion - startBase) / TOEICTemplate.questionsPerPage
+            let start = startBase + (offset * TOEICTemplate.questionsPerPage)
+            let end = min(start + TOEICTemplate.questionsPerPage - 1, TOEICTemplate.multiQuestionRange.upperBound)
+            return start...end
+        } else {
+            return currentQuestion...currentQuestion
+        }
+    }
 
     var currentPart: TOEICPart {
         TOEICTemplate.part(for: currentQuestion)
@@ -71,15 +85,15 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     var answeredCount: Int {
-        sheet.answers.filter { $0.selectedOption != nil }.count
+        sheet.answeredCount
     }
 
     var progress: Double {
-        Double(answeredCount) / 200.0
+        Double(answeredCount) / Double(TOEICTemplate.totalQuestions)
     }
 
     var progressText: String {
-        "\(answeredCount) / 200"
+        "\(answeredCount) / \(TOEICTemplate.totalQuestions)"
     }
 
     // MARK: - 回答操作
@@ -95,6 +109,27 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         case .correct:
             sheet.answers[index].selectedOption = choice
             sheet.status = .scoring
+        }
+        
+        // 複数問題表示（Q32-100）の場合の自動遷移ロジック
+        if TOEICTemplate.multiQuestionRange.contains(currentQuestion) {
+            let range = currentQuestionRange
+            // ページ内の全問題が回答済みかチェック
+            let allAnswered = range.allSatisfy { q in
+                sheet.answers[q-1].selectedOption != nil
+            }
+            if allAnswered && range.upperBound < TOEICTemplate.totalQuestions {
+                // 次のページ/問題へ
+                currentQuestion = range.upperBound + 1
+            } else if sheet.answers[currentQuestion-1].selectedOption != nil && currentQuestion < range.upperBound {
+                // ページ内の次の問題へ
+                currentQuestion += 1
+            }
+        } else {
+            // 単一問題表示の場合の自動遷移
+            if currentQuestion < TOEICTemplate.totalQuestions {
+                goNext()
+            }
         }
     }
 
@@ -112,13 +147,24 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     func goNext() {
-        if currentQuestion < 200 {
+        if (TOEICTemplate.multiQuestionRange.lowerBound...(TOEICTemplate.multiQuestionRange.upperBound - TOEICTemplate.questionsPerPage)).contains(currentQuestion) {
+            // 3問スキップして次のグループの先頭へ
+            let next = currentQuestionRange.upperBound + 1
+            currentQuestion = min(next, TOEICTemplate.totalQuestions)
+        } else if currentQuestion < TOEICTemplate.totalQuestions {
             currentQuestion += 1
         }
     }
 
     func goPrevious() {
-        if currentQuestion > 1 {
+        let multiStart = TOEICTemplate.multiQuestionRange.lowerBound
+        let multiEnd = TOEICTemplate.multiQuestionRange.upperBound
+        
+        if ((multiStart + TOEICTemplate.questionsPerPage)...multiEnd).contains(currentQuestion) {
+            // 3問戻って前のグループの先頭へ
+            let prev = currentQuestionRange.lowerBound - TOEICTemplate.questionsPerPage
+            currentQuestion = max(prev, 1)
+        } else if currentQuestion > 1 {
             currentQuestion -= 1
         }
     }
@@ -149,6 +195,15 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         currentQuestion = 1
     }
 
+
+    func saveToStorage() {
+        // SwiftData does this automatically for reference types
+    }
+    
+    func finishCorrectInput() {
+        sheet.status = .correctReady
+    }
+
     func score() {
         sheet.status = .scored
     }
@@ -159,9 +214,10 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         guard !isTimerRunning else { return }
         isTimerRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            // クラスが @MainActor なので、メインスレッドでの実行を保証
             Task { @MainActor in
-                self?.isTimerRunning = true // dummy to keep reference
-                // SwiftData モデルの更新は自動的に反映される
+                self.sheet.elapsedSeconds += 1
             }
         }
     }
@@ -192,14 +248,6 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         return questionNumber == currentQuestion ? .current : .unanswered
     }
 }
-
-// MARK: - グリッドセルの状態
-enum AnswerCellStatus {
-    case unanswered
-    case current
-    case answered
-}
-
 
 // MARK: - グリッドセルの状態
 enum AnswerCellStatus {

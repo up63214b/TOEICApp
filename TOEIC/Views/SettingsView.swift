@@ -1,86 +1,68 @@
 // SettingsView.swift
-// TOEICApp - 設定画面
+// TOEICApp - 設定画面 (SwiftData対応)
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
-
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showClearAllAlert = false
+    @Environment(\.modelContext) private var modelContext
+    @Query private var sheets: [AnswerSheet]
+    
+    @State private var showDeleteAlert = false
+    
+    private var totalSheets: Int {
+        sheets.count
+    }
+    
+    private var totalScoredSheets: Int {
+        sheets.filter { $0.status == .scored }.count
+    }
 
     var body: some View {
         NavigationStack {
             List {
-                // データ管理
-                Section("データ管理") {
+                Section(header: Text("データ統計")) {
                     HStack {
-                        Label("解答シート数", systemImage: "doc.text.fill")
+                        Text("作成済みシート数")
                         Spacer()
-                        Text("\(dataManager.totalSheets)件")
+                        Text("\(totalSheets)件")
                             .foregroundColor(.secondary)
                     }
-
                     HStack {
-                        Label("採点済み", systemImage: "checkmark.circle.fill")
+                        Text("採点済みシート数")
                         Spacer()
-                        Text("\(dataManager.totalScoredSheets)件")
+                        Text("\(totalScoredSheets)件")
                             .foregroundColor(.secondary)
                     }
-
+                }
+                
+                Section(header: Text("データ管理"), footer: Text("※削除したデータは元に戻せません。")) {
                     Button(role: .destructive) {
-                        showClearAllAlert = true
+                        showDeleteAlert = true
                     } label: {
-                        Label("全データを削除", systemImage: "trash")
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("すべてのデータを削除")
+                        }
                     }
-                }
-
-                // アプリ情報
-                Section("アプリ情報") {
-                    HStack {
-                        Label("バージョン", systemImage: "info.circle")
-                        Spacer()
-                        Text("2.0.0")
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Label("テスト形式", systemImage: "doc.text")
-                        Spacer()
-                        Text("TOEIC L&R 200問")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                // 免責事項
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("免責事項")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-                        Text("TOEIC\u{00AE} is a registered trademark of ETS. This product is not endorsed or approved by ETS.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .lineSpacing(3)
-                    }
-                    .padding(.vertical, 4)
                 }
             }
             .navigationTitle("設定")
-            .navigationBarTitleDisplayMode(.large)
-            .alert("全データを削除しますか？", isPresented: $showClearAllAlert) {
+            .alert("全データ削除", isPresented: $showDeleteAlert) {
                 Button("キャンセル", role: .cancel) {}
                 Button("削除する", role: .destructive) {
-                    dataManager.clearAllSheets()
+                    clearAllSheets()
                 }
             } message: {
-                Text("すべての解答シートが削除されます。この操作は元に戻せません。")
+                Text("すべての解答シート履歴を削除してもよろしいですか？")
             }
         }
     }
-}
-
-#Preview {
-    SettingsView()
-        .environmentObject(DataManager.shared)
+    
+    private func clearAllSheets() {
+        for sheet in sheets {
+            modelContext.delete(sheet)
+        }
+        do { try modelContext.save() } catch { print("Failed to save: (error)") }
+    }
 }

@@ -71,6 +71,9 @@ struct AnswerInputView: View {
                     viewModel.startTimer()
                 }
             }
+            .onDisappear {
+                viewModel.stopTimer()
+            }
         }
     }
 
@@ -112,39 +115,17 @@ struct AnswerInputView: View {
 
     // MARK: - 問題セクション
     private var questionSection: some View {
-        VStack(spacing: 32) {
-            // 問題番号
-            Text("Q\(viewModel.currentQuestion)")
-                .font(.system(size: 64, weight: .bold, design: .rounded))
-                .foregroundColor(.primary)
-
-            // 選択肢ボタン
-            HStack(spacing: 16) {
-                ForEach(viewModel.choiceLabels, id: \.self) { choice in
-                    ChoiceButton(
-                        label: choice,
-                        isSelected: viewModel.currentAnswer == choice,
-                        action: {
-                            viewModel.selectChoice(choice)
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 20)
-
-            // クリアボタン
-            if viewModel.currentAnswer != nil {
-                Button {
-                    viewModel.clearCurrentAnswer()
-                } label: {
-                    Text("クリア")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+        VStack(spacing: 24) {
+            ForEach(viewModel.currentQuestionRange, id: \.self) { qNumber in
+                questionRow(for: qNumber)
+                    .padding(.vertical, 8)
+                    .background(viewModel.currentQuestion == qNumber ? Color.blue.opacity(0.05) : Color.clear)
+                    .cornerRadius(12)
             }
         }
+        .padding(.horizontal)
         // 左右スワイプで問題移動
-        .contentShape(Rectangle()) // スワイプ判定エリアを広げる
+        .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 50)
                 .onEnded { value in
@@ -157,6 +138,53 @@ struct AnswerInputView: View {
                     }
                 }
         )
+    }
+
+    private func questionRow(for qNumber: Int) -> some View {
+        let isCurrent = viewModel.currentQuestion == qNumber
+        let index = qNumber - 1
+        let answer = viewModel.sheet.answers[index].selectedOption
+        let labels = TOEICTemplate.choiceLabels(for: qNumber)
+
+        return VStack(spacing: 12) {
+            HStack {
+                Text("Q\(qNumber)")
+                    .font(.system(size: isCurrent ? 32 : 24, weight: .bold, design: .rounded))
+                    .foregroundColor(isCurrent ? .primary : .secondary)
+                
+                Spacer()
+                
+                if let answer = answer {
+                    Text(answer)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.horizontal)
+            .onTapGesture {
+                viewModel.currentQuestion = qNumber
+            }
+
+            if isCurrent {
+                HStack(spacing: 12) {
+                    ForEach(labels, id: \.self) { choice in
+                        ChoiceButton(
+                            label: choice,
+                            isSelected: answer == choice,
+                            action: {
+                                viewModel.currentQuestion = qNumber
+                                viewModel.selectChoice(choice)
+                            }
+                        )
+                        .scaleEffect(isCurrent ? 1.0 : 0.8)
+                    }
+                }
+                .transition(.opacity.combined(with: .scale))
+            }
+        }
     }
 
     // MARK: - プログレス
@@ -261,18 +289,19 @@ struct ChoiceButton: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.title)
+                .font(.headline)
                 .fontWeight(.bold)
-                .frame(width: 64, height: 64)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
                 .background(isSelected ? Color.blue : Color(.systemGray5))
                 .foregroundColor(isSelected ? .white : .primary)
-                .cornerRadius(16)
+                .cornerRadius(12)
         }
     }
 }
 
 #Preview {
     let sheet = AnswerSheet(title: "テスト")
-    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)
+    let vm = AnswerSheetViewModel(sheet: sheet)
     AnswerInputView(viewModel: vm)
 }

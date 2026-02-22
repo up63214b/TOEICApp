@@ -95,13 +95,13 @@ struct ScoringResultView: View {
             sectionCard(
                 title: "Listening",
                 icon: "headphones",
-                score: sheet.listeningScore,
+                score: sheet.listeningPartScore,
                 color: .blue
             )
             sectionCard(
                 title: "Reading",
                 icon: "doc.text",
-                score: sheet.readingScore,
+                score: sheet.readingPartScore,
                 color: .purple
             )
         }
