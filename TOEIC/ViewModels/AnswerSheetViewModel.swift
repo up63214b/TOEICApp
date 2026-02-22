@@ -20,6 +20,15 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     @Published var inputMode: InputMode = .answer
     @Published var isTimerRunning: Bool = false
     @Published var showGrid: Bool = false
+    
+    // 表示問題数の設定 (1, 3, 5, 10など)
+    @Published var questionsPerPage: Int = 3
+    
+    // 現在のモードに応じた実質的な表示数
+    var effectiveQuestionsPerPage: Int {
+        // .correctモード（正解入力時）は10問ずつ、それ以外はユーザー設定に従う
+        inputMode == .correct ? 10 : questionsPerPage
+    }
 
     private var timer: Timer?
 
@@ -51,11 +60,11 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     // MARK: - 現在の問題情報
 
     var currentQuestionRange: ClosedRange<Int> {
-        if TOEICTemplate.multiQuestionRange.contains(currentQuestion) {
-            let startBase = TOEICTemplate.multiQuestionRange.lowerBound
-            let offset = (currentQuestion - startBase) / TOEICTemplate.questionsPerPage
-            let start = startBase + (offset * TOEICTemplate.questionsPerPage)
-            let end = min(start + TOEICTemplate.questionsPerPage - 1, TOEICTemplate.multiQuestionRange.upperBound)
+        let perPage = effectiveQuestionsPerPage
+        if perPage > 1 {
+            let offset = (currentQuestion - 1) / perPage
+            let start = (offset * perPage) + 1
+            let end = min(start + perPage - 1, TOEICTemplate.totalQuestions)
             return start...end
         } else {
             return currentQuestion...currentQuestion
@@ -78,9 +87,7 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         case .answer:
             return sheet.answers[index].selectedOption
         case .correct:
-            // 注意: AnswerSheet.Answer 構造体に correctOption が追加されていない場合は
-            // ここでモデルの拡張が必要になる可能性があるが、現状のモデルに合わせる
-            return sheet.answers[index].selectedOption // 仮
+            return sheet.answers[index].correctOption
         }
     }
 
@@ -104,26 +111,29 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         
         switch inputMode {
         case .answer:
-            sheet.answers[index].selectedOption = choice
+            sheet.setAnswer(choice, for: currentQuestion)
             sheet.status = .answering
         case .correct:
-            sheet.answers[index].selectedOption = choice
-            sheet.status = .scoring
+            sheet.setCorrectAnswer(choice, for: currentQuestion)
+            // 採点中ステータスにする（必要に応じて）
+            if sheet.status != .scored {
+                sheet.status = .scoring
+            }
         }
         
-        // 複数問題表示（Q32-100）の場合の自動遷移ロジック
-        if TOEICTemplate.multiQuestionRange.contains(currentQuestion) {
+        // 複数問題表示の場合の自動遷移ロジック
+        if effectiveQuestionsPerPage > 1 {
             let range = currentQuestionRange
             // ページ内の全問題が回答済みかチェック
             let allAnswered = range.allSatisfy { q in
                 sheet.answers[q-1].selectedOption != nil
             }
+            
             if allAnswered && range.upperBound < TOEICTemplate.totalQuestions {
-                // 次のページ/問題へ
+                // 全て解き終わったら次のページへ
                 currentQuestion = range.upperBound + 1
-            } else if sheet.answers[currentQuestion-1].selectedOption != nil && currentQuestion < range.upperBound {
-                // ページ内の次の問題へ
-                currentQuestion += 1
+            } else {
+                // ページ内にとどまる。フォーカスは現在の問題のまま（自動で動かさないことで順不同入力をしやすくする）
             }
         } else {
             // 単一問題表示の場合の自動遷移
@@ -147,8 +157,7 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     func goNext() {
-        if (TOEICTemplate.multiQuestionRange.lowerBound...(TOEICTemplate.multiQuestionRange.upperBound - TOEICTemplate.questionsPerPage)).contains(currentQuestion) {
-            // 3問スキップして次のグループの先頭へ
+        if effectiveQuestionsPerPage > 1 {
             let next = currentQuestionRange.upperBound + 1
             currentQuestion = min(next, TOEICTemplate.totalQuestions)
         } else if currentQuestion < TOEICTemplate.totalQuestions {
@@ -157,12 +166,8 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     func goPrevious() {
-        let multiStart = TOEICTemplate.multiQuestionRange.lowerBound
-        let multiEnd = TOEICTemplate.multiQuestionRange.upperBound
-        
-        if ((multiStart + TOEICTemplate.questionsPerPage)...multiEnd).contains(currentQuestion) {
-            // 3問戻って前のグループの先頭へ
-            let prev = currentQuestionRange.lowerBound - TOEICTemplate.questionsPerPage
+        if effectiveQuestionsPerPage > 1 {
+            let prev = currentQuestionRange.lowerBound - effectiveQuestionsPerPage
             currentQuestion = max(prev, 1)
         } else if currentQuestion > 1 {
             currentQuestion -= 1

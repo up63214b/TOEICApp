@@ -1,63 +1,39 @@
 # Progress Memory - TOEICApp（進捗メモリ）
-# AIはセッション開始時にこのファイルを読み、終了時に更新すること
 
 ## 完了済み（Done）
 - MVVM構成の基本実装（Model / ViewModel / Views）
-- UserDefaults による解答シート永続化
+- SwiftData による解答シート永続化への全面移行（UserDefaultsから移行完了）
 - 回答入力・正解入力・採点機能
 - 履歴・設定画面
-- AIエージェントシステム（6体 + coordinator.sh）
-- AIエージェントインフラ整備（config.sh / prompts/ 作成、utils.sh バグ修正）
-- AIレビュー結果の適用（#1~#4, #6, #7, #9）
+- UI/UX改善
+  - 回答入力時の自動遷移（回答タップで次へ）
+  - Part 3/4 (Q32-100) の複数問題同時表示（1画面3問）
+  - 左右スワイプによる問題移動
+  - パート別正答率の可視化（Swift Charts によるグラフ表示）
+  - 間違えた問題の復習ノート機能（メモ保存）
+- アプリアイコンの設定（1024px, Single Size対応）
+- AIエージェントシステム（AgentOrchestrator）のバグ修正と連携
+  - パス解決ロジックの強化
+  - 構造的リファクタリングの自律実行
 
-## AIレビュー適用済み修正内容
-- #1/#2 HomeView: fullScreenCover(item:) パターンに変更（ViewModel再生成バグ解消）
-- #3 DataManager: @MainActor 付与（メインスレッド安全性確保）
-- #4 HistoryView: DateFormatter を static let に変更（毎回生成コスト削減）
-- #6 AnswerInputView: 正解未完了時に確認アラートを表示
-- #7 AnswerInputView: startTimer() の onAppear にコメント追加
-- #9 HomeView: 採点済み5件制限のヘッダー案内を追加
+## 修正・改善済み（2026-02-22）
+- AnswerSheet を struct から @Model class へ変更
+- TOEICApp.swift での ModelContainer セットアップ
+- AnswerSheetViewModel の SwiftData 対応（参照型への変更）
+- DataManager.swift の廃止と全Viewでの modelContext への移行
+- タイマーの MainActor 対応とライフサイクル管理（onDisappearでの停止）
+- SwiftData Predicate 用の statusRaw プロパティ追加
+- TOEICTemplate でのマジックナンバー定数化
 
-## エージェント設定レビュー・修正（2026-02-19完了）
-- reviewer.md: レビュー対象を .agents/ 配下に更新、TOEICドメイン知識追加、前回結果参照ルール修正
-- improver.md: 追加指示の参照元明記、info修正の緩和、自信がない場合のskipルール追加
-- verifier.md: verdict判定基準を明示、保守的判定ルール追加、構文検証の正直な記述、new_concerns対応定義
-- ux-analyst.md: コード推測の注記追加、HIG準拠の観点追加、measurement フィールド追加
-- test-writer.md: TOEIC固有テスト対象追記、ViewInspector削除しXCTest限定、配置先明記、テストターゲット作成提案
-- feature-proposer.md: 現在の機能一覧追加、effort_estimate基準明示、next_steps フィールド追加
-- config.sh: IMPROVER_INSTRUCTION を空にし improver.md に一元化、verifier単体モード追加、タイムアウト設定追加
-- CLAUDE.md 新規作成（プロジェクト固有ルール・アーキテクチャ・ドメイン知識）
-- lessons.md 新規作成（初期教訓3件）
-- runner.sh: 空出力バリデーション追加
-
-## プロジェクト構造整理（2026-02-19完了）
-- scripts/ai-agents/ 削除（旧AIエージェントシステムを完全削除）
-- .agents/output/ の蓄積ファイルをクリア、.gitignore に追加
-- Xcode プロジェクトをフラット化: TOEICApp/TOEICApp/{TOEIC.xcodeproj, TOEIC/} → TOEICApp/{TOEIC.xcodeproj, TOEIC/}
-- xcodebuild -list で動作確認済み
-
-## v3.0 機能追加（2026-02-19実装）
-- F1: 入力順序の自由化（正解先行 / 回答先行を選択可能）
-  - InputOrder enum 追加、SheetStatus に correctInput/correctReady 追加
-  - AnswerSheet に inputOrder フィールド追加（既存データ後方互換あり）
-  - CreateSheetView に入力モード選択UI追加
-  - SheetDetailView, HomeView, AnswerInputView を新ステータスに対応
-  - ViewModel に finishCorrectInput(), startAnsweringAfterCorrect() 追加
-- F2: 間違い一覧・復習機能
-  - WrongAnswer 構造体追加、AnswerSheet.wrongAnswers プロパティ追加
-  - WrongAnswersView 新規作成（パート別グループ表示、L/R/Part フィルター）
-  - ScoringResultView, SheetDetailView に「間違えた問題を見る」ボタン追加
-- F3: スワイプ問題移動
-  - AnswerInputView に DragGesture 追加（左右スワイプで前後移動）
-- 要件定義書: docs/requirements-v3.md
-
-## 現在作業中（In Progress）
-- なし
+## 現在のステータス
+- プロジェクトは SwiftData ベースで安定動作中
+- xcodebuild SUCCEEDED を確認済み
 
 ## 次にやること（Next）
-- Xcodeでビルド確認（v3.0 機能追加後）
-- 残りのinfo指摘（#10: listeningScore/readingScore のPartScore分離）は検討中
-- エージェントシステムの実行テスト（修正後の動作確認）
+- [ ] パート別正答率の可視化（グラフ表示機能）
+- [ ] 間違えた問題のメモ・復習ノート機能
+- [ ] 学習統計ダッシュボード（日別の学習量表示など）
+- [ ] iCloud 同期（SwiftDataを活用）
 
 ---
-最終更新: 2026-02-19
+最終更新: 2026-02-22

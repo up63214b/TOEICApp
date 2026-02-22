@@ -5,9 +5,10 @@ import SwiftUI
 
 struct WrongAnswersView: View {
 
-    let sheet: AnswerSheet
+    @Bindable var sheet: AnswerSheet
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFilter: AnswerFilter = .all
+    @State private var editingNoteAnswer: WrongAnswer?
 
     // フィルター種別
     enum AnswerFilter: Hashable {
@@ -73,6 +74,9 @@ struct WrongAnswersView: View {
                         .padding()
                     }
                 }
+            }
+            .sheet(item: $editingNoteAnswer) { wrong in
+                NoteEditView(sheet: sheet, questionNumber: wrong.questionNumber)
             }
             .navigationTitle("間違えた問題 (\(filteredWrongAnswers.count)問)")
             .navigationBarTitleDisplayMode(.inline)
@@ -152,41 +156,116 @@ struct WrongAnswersView: View {
     }
 
     private func wrongAnswerRow(_ wrong: WrongAnswer) -> some View {
-        HStack {
-            // 問題番号
-            Text("Q\(wrong.questionNumber)")
-                .font(.system(.body, design: .monospaced))
-                .fontWeight(.semibold)
-                .frame(width: 50, alignment: .leading)
+        Button {
+            editingNoteAnswer = wrong
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    // 問題番号
+                    Text("Q\(wrong.questionNumber)")
+                        .font(.system(.body, design: .monospaced))
+                        .fontWeight(.semibold)
+                        .frame(width: 50, alignment: .leading)
 
-            Spacer()
+                    Spacer()
 
-            // ユーザーの回答
-            HStack(spacing: 4) {
-                Text("あなた:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(wrong.userAnswer ?? "--")
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.red)
+                    // ユーザーの回答
+                    HStack(spacing: 4) {
+                        Text("あなた:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(wrong.userAnswer ?? "--")
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.red)
+                    }
+
+                    Spacer()
+
+                    // 正解
+                    HStack(spacing: 4) {
+                        Text("正解:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(wrong.correctAnswer)
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.green)
+                    }
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 4)
+                }
+                
+                if let note = wrong.note, !note.isEmpty {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .lineLimit(1)
+                        .padding(.leading, 50)
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+}
 
-            Spacer()
+// MARK: - メモ編集用View
+struct NoteEditView: View {
+    @Bindable var sheet: AnswerSheet
+    let questionNumber: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var note: String = ""
 
-            // 正解
-            HStack(spacing: 4) {
-                Text("正解:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(wrong.correctAnswer)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.green)
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                HStack {
+                    Text("Q\(questionNumber)")
+                        .font(.title.bold())
+                    Spacer()
+                    Text(TOEICTemplate.part(for: questionNumber).name)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+
+                TextEditor(text: $note)
+                    .padding(8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top)
+            .navigationTitle("復習メモ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        saveNote()
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                let index = questionNumber - 1
+                note = sheet.answers[index].note ?? ""
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+    }
+
+    private func saveNote() {
+        let index = questionNumber - 1
+        sheet.answers[index].note = note.isEmpty ? nil : note
+        // SwiftData will auto-save or we can trigger it
     }
 }
 

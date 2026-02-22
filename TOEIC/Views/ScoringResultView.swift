@@ -2,6 +2,7 @@
 // TOEICApp - 採点結果画面
 
 import SwiftUI
+import Charts
 
 struct ScoringResultView: View {
 
@@ -15,6 +16,9 @@ struct ScoringResultView: View {
                 VStack(spacing: 24) {
                     // メインスコア
                     mainScoreSection
+
+                    // グラフセクション
+                    chartSection
 
                     // Listening / Reading
                     sectionScores
@@ -87,6 +91,45 @@ struct ScoringResultView: View {
         case 60..<80:  return .orange
         default:       return .red
         }
+    }
+
+    // MARK: - パフォーマンスグラフ
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("パート別正解率 (%)")
+                .font(.headline)
+            
+            Chart {
+                ForEach(sheet.partScores) { partScore in
+                    BarMark(
+                        x: .value("パート", "P\(partScore.part.rawValue)"),
+                        y: .value("正解率", partScore.percentage)
+                    )
+                    .foregroundStyle(barColor(for: partScore.percentage).gradient)
+                    .cornerRadius(4)
+                }
+                
+                RuleMark(y: .value("平均", sheet.scorePercentage))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                    .foregroundStyle(.secondary)
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("平均")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+            }
+            .frame(height: 180)
+            .chartYScale(domain: 0...100)
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel()
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Listening / Reading セクション

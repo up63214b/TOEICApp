@@ -3,6 +3,7 @@
 
 import SwiftUI
 import SwiftData
+import Charts
 
 struct SheetDetailView: View {
     @Environment(\.modelContext) private var modelContext
@@ -18,6 +19,14 @@ struct SheetDetailView: View {
         List {
             Section(header: Text("ステータス")) {
                 statusRow
+            }
+            
+            if sheet.status == .scored {
+                Section(header: Text("パート別正解率")) {
+                    performanceChart
+                        .frame(height: 160)
+                        .padding(.vertical, 8)
+                }
             }
             
             Section(header: Text("アクション")) {
@@ -133,7 +142,38 @@ struct SheetDetailView: View {
 
     private func deleteSheet() {
         modelContext.delete(sheet)
-        do { try modelContext.save() } catch { print("Failed to save: (error)") }
+        do { try modelContext.save() } catch { print("Failed to save: \(error)") }
         dismiss()
+    }
+
+    private var performanceChart: some View {
+        Chart {
+            ForEach(sheet.partScores) { partScore in
+                BarMark(
+                    x: .value("パート", "P\(partScore.part.rawValue)"),
+                    y: .value("正解率", partScore.percentage)
+                )
+                .foregroundStyle(barColor(for: partScore.percentage).gradient)
+                .cornerRadius(4)
+            }
+            
+            RuleMark(y: .value("平均", sheet.scorePercentage))
+                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                .foregroundStyle(.secondary)
+        }
+        .chartYScale(domain: 0...100)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel()
+            }
+        }
+    }
+
+    private func barColor(for percentage: Double) -> Color {
+        switch percentage {
+        case 80...100: return .green
+        case 60..<80:  return .orange
+        default:       return .red
+        }
     }
 }

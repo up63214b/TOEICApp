@@ -7,7 +7,11 @@ struct AnswerInputView: View {
 
     @ObservedObject var viewModel: AnswerSheetViewModel
     @Environment(\.dismiss) private var dismiss
-    // 正解入力が未完了のまま完了ボタンが押された場合の確認アラート（#6対応）
+    
+    // 正解を表示するかどうかの設定
+    @State private var showCorrectAnswers = false
+    
+    // 正解入力モードが未完了の場合の警告
     @State private var showIncompleteAlert = false
 
     var body: some View {
@@ -40,10 +44,40 @@ struct AnswerInputView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        viewModel.showGrid = true
-                    } label: {
-                        Image(systemName: "square.grid.3x3")
+                    HStack(spacing: 16) {
+                        // 正解表示トグル
+                        Button {
+                            showCorrectAnswers.toggle()
+                        } label: {
+                            Image(systemName: showCorrectAnswers ? "eye.fill" : "eye.slash")
+                                .foregroundColor(showCorrectAnswers ? .green : .secondary)
+                        }
+                        
+                        // 表示数切り替えメニュー（回答入力モードのみ表示）
+                        if viewModel.inputMode == .answer {
+                            Menu {
+                                ForEach([1, 3, 5, 10], id: \.self) { count in
+                                    Button {
+                                        viewModel.questionsPerPage = count
+                                    } label: {
+                                        HStack {
+                                            Text("\(count)問ずつ表示")
+                                            if viewModel.questionsPerPage == count {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "list.bullet.indent")
+                            }
+                        }
+
+                        Button {
+                            viewModel.showGrid = true
+                        } label: {
+                            Image(systemName: "square.grid.3x3")
+                        }
                     }
                 }
             }
@@ -115,15 +149,18 @@ struct AnswerInputView: View {
 
     // MARK: - 問題セクション
     private var questionSection: some View {
-        VStack(spacing: 24) {
-            ForEach(viewModel.currentQuestionRange, id: \.self) { qNumber in
-                questionRow(for: qNumber)
-                    .padding(.vertical, 8)
-                    .background(viewModel.currentQuestion == qNumber ? Color.blue.opacity(0.05) : Color.clear)
-                    .cornerRadius(12)
+        ScrollView {
+            VStack(spacing: viewModel.inputMode == .correct ? 12 : 24) {
+                ForEach(viewModel.currentQuestionRange, id: \.self) { qNumber in
+                    if viewModel.inputMode == .correct {
+                        correctInputRow(for: qNumber)
+                    } else {
+                        questionRow(for: qNumber)
+                    }
+                }
             }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
         // 左右スワイプで問題移動
         .contentShape(Rectangle())
         .gesture(
@@ -140,10 +177,52 @@ struct AnswerInputView: View {
         )
     }
 
+    // 正解入力用のコンパクトな行
+    private func correctInputRow(for qNumber: Int) -> some View {
+        let isCurrent = viewModel.currentQuestion == qNumber
+        let index = qNumber - 1
+        let answer = viewModel.sheet.answers[index].selectedOption
+        let correct = viewModel.sheet.answers[index].correctOption
+        let labels = TOEICTemplate.choiceLabels(for: qNumber)
+
+        return HStack(spacing: 12) {
+            Text("Q\(qNumber)")
+                .font(.system(.body, design: .monospaced))
+                .fontWeight(isCurrent ? .bold : .medium)
+                .frame(width: 45, alignment: .leading)
+                .foregroundColor(isCurrent ? .blue : .primary)
+
+            HStack(spacing: 8) {
+                ForEach(labels, id: \.self) { choice in
+                    Button {
+                        viewModel.currentQuestion = qNumber
+                        viewModel.selectChoice(choice)
+                    } label: {
+                        Text(choice)
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 38)
+                            .background(correct == choice ? Color.green : Color(.systemGray5))
+                            .foregroundColor(correct == choice ? .white : .primary)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(isCurrent ? Color.blue.opacity(0.08) : Color.clear)
+        .cornerRadius(10)
+        .onTapGesture {
+            viewModel.currentQuestion = qNumber
+        }
+    }
+
     private func questionRow(for qNumber: Int) -> some View {
         let isCurrent = viewModel.currentQuestion == qNumber
         let index = qNumber - 1
         let answer = viewModel.sheet.answers[index].selectedOption
+        let correct = viewModel.sheet.answers[index].correctOption
         let labels = TOEICTemplate.choiceLabels(for: qNumber)
 
         return VStack(spacing: 12) {
@@ -154,7 +233,35 @@ struct AnswerInputView: View {
                 
                 Spacer()
                 
-                if let answer = answer {
+                if showCorrectAnswers {
+                    // 正答確認モード
+                    HStack(spacing: 8) {
+                        if let answer = answer, let correct = correct {
+                            // 実際の○×判定
+                            Image(systemName: answer == correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(answer == correct ? .green : .red)
+                                .font(.headline)
+                        } else if let _ = correct {
+                            Text("(未回答)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Text("正解:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if let correct = correct {
+                            Text(correct)
+                                .font(.headline)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("-")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } else if let answer = answer {
                     Text(answer)
                         .font(.headline)
                         .foregroundColor(.white)
@@ -164,22 +271,32 @@ struct AnswerInputView: View {
                 }
             }
             .padding(.horizontal)
+            .contentShape(Rectangle())
             .onTapGesture {
-                viewModel.currentQuestion = qNumber
+                withAnimation {
+                    viewModel.currentQuestion = qNumber
+                }
             }
 
             if isCurrent {
-                HStack(spacing: 12) {
-                    ForEach(labels, id: \.self) { choice in
-                        ChoiceButton(
-                            label: choice,
-                            isSelected: answer == choice,
-                            action: {
-                                viewModel.currentQuestion = qNumber
-                                viewModel.selectChoice(choice)
-                            }
-                        )
-                        .scaleEffect(isCurrent ? 1.0 : 0.8)
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        ForEach(labels, id: \.self) { choice in
+                            ChoiceButton(
+                                label: choice,
+                                isSelected: answer == choice,
+                                action: {
+                                    viewModel.currentQuestion = qNumber
+                                    viewModel.selectChoice(choice)
+                                }
+                            )
+                        }
+                    }
+                    
+                    if showCorrectAnswers {
+                        Text("※正解をタップして入力（開発中）")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
                     }
                 }
                 .transition(.opacity.combined(with: .scale))
@@ -206,7 +323,9 @@ struct AnswerInputView: View {
         HStack(spacing: 20) {
             // 前へ
             Button {
-                viewModel.goPrevious()
+                withAnimation {
+                    viewModel.goPrevious()
+                }
             } label: {
                 HStack {
                     Image(systemName: "chevron.left")
@@ -218,10 +337,10 @@ struct AnswerInputView: View {
                 .foregroundColor(.primary)
                 .cornerRadius(12)
             }
-            .disabled(viewModel.currentQuestion <= 1)
+            .disabled(viewModel.currentQuestionRange.lowerBound <= 1)
 
             // 次へ / 完了
-            if viewModel.currentQuestion >= TOEICTemplate.totalQuestions {
+            if viewModel.currentQuestionRange.upperBound >= TOEICTemplate.totalQuestions {
                 Button {
                     handleFinish()
                 } label: {
@@ -235,7 +354,9 @@ struct AnswerInputView: View {
                 }
             } else {
                 Button {
-                    viewModel.goNext()
+                    withAnimation {
+                        viewModel.goNext()
+                    }
                 } label: {
                     HStack {
                         Text("次へ")
