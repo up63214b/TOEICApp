@@ -9,6 +9,7 @@ struct SheetDetailView: View {
     @State var sheet: AnswerSheet
     @State private var activeViewModel: AnswerSheetViewModel?  // VM を事前生成して保持
     @State private var showScoringResult = false
+    @State private var showWrongAnswers = false
     @State private var showDeleteAlert = false
     @Environment(\.dismiss) private var dismiss
 
@@ -36,7 +37,7 @@ struct SheetDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    if sheet.status != .scored {
+                    if sheet.status != .scored {  // 採点済み以外は削除可能
                         Button(role: .destructive) {
                             showDeleteAlert = true
                         } label: {
@@ -67,6 +68,9 @@ struct SheetDetailView: View {
             reloadSheet()
         } content: {
             ScoringResultView(sheet: sheet)
+        }
+        .sheet(isPresented: $showWrongAnswers) {
+            WrongAnswersView(sheet: sheet)
         }
     }
 
@@ -106,19 +110,23 @@ struct SheetDetailView: View {
 
     private var statusColor: Color {
         switch sheet.status {
-        case .answering: return .blue
-        case .answered:  return .orange
-        case .scoring:   return .purple
-        case .scored:    return .green
+        case .answering:    return .blue
+        case .answered:     return .orange
+        case .scoring:      return .purple
+        case .scored:       return .green
+        case .correctInput: return .purple
+        case .correctReady: return .orange
         }
     }
 
     private var statusIcon: String {
         switch sheet.status {
-        case .answering: return "pencil"
-        case .answered:  return "checkmark.circle"
-        case .scoring:   return "doc.text.magnifyingglass"
-        case .scored:    return "star.fill"
+        case .answering:    return "pencil"
+        case .answered:     return "checkmark.circle"
+        case .scoring:      return "doc.text.magnifyingglass"
+        case .scored:       return "star.fill"
+        case .correctInput: return "doc.text.magnifyingglass"
+        case .correctReady: return "checkmark.circle"
         }
     }
 
@@ -137,7 +145,7 @@ struct SheetDetailView: View {
             ProgressView(value: Double(sheet.answeredCount), total: Double(TOEICTemplate.totalQuestions))
                 .tint(.blue)
 
-            if sheet.status == .scoring || sheet.status == .scored {
+            if [.scoring, .scored, .correctInput, .correctReady].contains(sheet.status) {
                 HStack {
                     Text("正解入力")
                         .font(.headline)
@@ -187,7 +195,7 @@ struct SheetDetailView: View {
                     primaryButton(title: "採点する", icon: "star.fill") {
                         sheet.status = .scored
                         dataManager.updateSheet(sheet)
-                        reloadSheet()  // DataManager と @State の sheet を同期
+                        reloadSheet()
                         showScoringResult = true
                     }
                 }
@@ -195,6 +203,30 @@ struct SheetDetailView: View {
             case .scored:
                 primaryButton(title: "採点結果を見る", icon: "chart.bar") {
                     showScoringResult = true
+                }
+                if !sheet.wrongAnswers.isEmpty {
+                    secondaryButton(title: "間違えた問題を見る (\(sheet.wrongAnswers.count)問)", icon: "xmark.circle") {
+                        showWrongAnswers = true
+                    }
+                }
+
+            case .correctInput:
+                // 正解先行パターン: 正解入力中
+                primaryButton(title: "正解入力を続ける", icon: "doc.text.magnifyingglass") {
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
+                }
+
+            case .correctReady:
+                // 正解先行パターン: 正解入力完了、回答待ち
+                primaryButton(title: "回答を入力する", icon: "pencil") {
+                    sheet.status = .answering
+                    dataManager.updateSheet(sheet)
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
+                }
+                secondaryButton(title: "正解を修正する", icon: "doc.text.magnifyingglass") {
+                    sheet.status = .correctInput
+                    dataManager.updateSheet(sheet)
+                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
                 }
             }
         }

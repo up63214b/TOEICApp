@@ -36,9 +36,13 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
             inputMode = .correct
         case .scored:
             inputMode = .correct
+        case .correctInput:
+            inputMode = .correct
+        case .correctReady:
+            inputMode = .answer
         }
 
-        // 回答入力中なら未回答の最初の問題へ移動
+        // 入力モードに応じて最初の未入力問題へ移動
         if inputMode == .answer {
             moveToFirstUnanswered()
         } else {
@@ -96,7 +100,10 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
             sheet.status = .answering
         case .correct:
             sheet.setCorrectAnswer(choice, for: currentQuestion)
-            sheet.status = .scoring
+            // 正解先行パターンの場合は correctInput を維持する
+            if sheet.status != .correctInput {
+                sheet.status = .scoring
+            }
         }
         // save()は呼ばない（親ビューの再描画でfullScreenCoverが閉じるのを防ぐ）
     }
@@ -145,17 +152,37 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
 
     /// 回答完了にする
     func finishAnswering() {
-        sheet.status = .answered
         stopTimer()
+        if sheet.isFullyCorrectAnswered {
+            // 正解先行パターン: 正解が既に全問入力済みなら自動採点
+            sheet.status = .scored
+        } else {
+            sheet.status = .answered
+        }
         save()
     }
 
-    /// 正解入力モードに切り替え
+    /// 正解入力モードに切り替え（回答先行パターン）
     func startCorrectInput() {
         inputMode = .correct
         sheet.status = .scoring
         currentQuestion = 1
         moveToFirstUnansweredCorrect()
+        save()
+    }
+
+    /// 正解入力を完了する（正解先行パターン）
+    func finishCorrectInput() {
+        sheet.status = .correctReady
+        save()
+    }
+
+    /// 正解先行パターンから回答入力を開始する
+    func startAnsweringAfterCorrect() {
+        inputMode = .answer
+        sheet.status = .answering
+        currentQuestion = 1
+        moveToFirstUnanswered()
         save()
     }
 

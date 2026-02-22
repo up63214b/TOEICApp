@@ -124,10 +124,12 @@ struct SheetRowView: View {
 
     private var statusColor: Color {
         switch sheet.status {
-        case .answering: return .blue
-        case .answered:  return .orange
-        case .scoring:   return .purple
-        case .scored:    return .green
+        case .answering:    return .blue
+        case .answered:     return .orange
+        case .scoring:      return .purple
+        case .scored:       return .green
+        case .correctInput: return .purple
+        case .correctReady: return .orange
         }
     }
 

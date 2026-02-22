@@ -36,11 +36,26 @@
 - Xcode プロジェクトをフラット化: TOEICApp/TOEICApp/{TOEIC.xcodeproj, TOEIC/} → TOEICApp/{TOEIC.xcodeproj, TOEIC/}
 - xcodebuild -list で動作確認済み
 
+## v3.0 機能追加（2026-02-19実装）
+- F1: 入力順序の自由化（正解先行 / 回答先行を選択可能）
+  - InputOrder enum 追加、SheetStatus に correctInput/correctReady 追加
+  - AnswerSheet に inputOrder フィールド追加（既存データ後方互換あり）
+  - CreateSheetView に入力モード選択UI追加
+  - SheetDetailView, HomeView, AnswerInputView を新ステータスに対応
+  - ViewModel に finishCorrectInput(), startAnsweringAfterCorrect() 追加
+- F2: 間違い一覧・復習機能
+  - WrongAnswer 構造体追加、AnswerSheet.wrongAnswers プロパティ追加
+  - WrongAnswersView 新規作成（パート別グループ表示、L/R/Part フィルター）
+  - ScoringResultView, SheetDetailView に「間違えた問題を見る」ボタン追加
+- F3: スワイプ問題移動
+  - AnswerInputView に DragGesture 追加（左右スワイプで前後移動）
+- 要件定義書: docs/requirements-v3.md
+
 ## 現在作業中（In Progress）
 - なし
 
 ## 次にやること（Next）
-- Xcodeでビルド確認（AIレビュー修正適用後）
+- Xcodeでビルド確認（v3.0 機能追加後）
 - 残りのinfo指摘（#10: listeningScore/readingScore のPartScore分離）は検討中
 - エージェントシステムの実行テスト（修正後の動作確認）
 

@@ -7,6 +7,7 @@ struct ScoringResultView: View {
 
     let sheet: AnswerSheet
     @Environment(\.dismiss) private var dismiss
+    @State private var showWrongAnswers = false
 
     var body: some View {
         NavigationStack {
@@ -21,12 +22,20 @@ struct ScoringResultView: View {
                     // パート別内訳
                     partBreakdown
 
+                    // 間違えた問題ボタン
+                    if !sheet.wrongAnswers.isEmpty {
+                        wrongAnswersButton
+                    }
+
                     // 時間
                     if sheet.elapsedSeconds > 0 {
                         timeSection
                     }
                 }
                 .padding()
+            }
+            .sheet(isPresented: $showWrongAnswers) {
+                WrongAnswersView(sheet: sheet)
             }
             .navigationTitle("採点結果")
             .navigationBarTitleDisplayMode(.inline)
@@ -174,6 +183,31 @@ struct ScoringResultView: View {
         case 80...100: return .green
         case 60..<80:  return .orange
         default:       return .red
+        }
+    }
+
+    // MARK: - 間違えた問題ボタン
+    private var wrongAnswersButton: some View {
+        Button {
+            showWrongAnswers = true
+        } label: {
+            HStack {
+                Image(systemName: "xmark.circle")
+                    .foregroundColor(.red)
+                Text("間違えた問題を見る")
+                    .fontWeight(.medium)
+                Spacer()
+                Text("\(sheet.wrongAnswers.count)問")
+                    .foregroundColor(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .foregroundColor(.primary)
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         }
     }
 

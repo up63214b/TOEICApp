@@ -53,7 +53,13 @@ struct AnswerInputView: View {
             .alert("正解入力が未完了です", isPresented: $showIncompleteAlert) {
                 Button("続ける", role: .cancel) {}
                 Button("このまま閉じる", role: .destructive) {
-                    viewModel.score()
+                    if viewModel.sheet.status == .correctInput {
+                        // 正解先行パターン: 未完了でも correctReady に遷移
+                        viewModel.finishCorrectInput()
+                    } else {
+                        // 回答先行パターン: 未完了でも採点
+                        viewModel.score()
+                    }
                     dismiss()
                 }
             } message: {
@@ -137,6 +143,20 @@ struct AnswerInputView: View {
                 }
             }
         }
+        // 左右スワイプで問題移動
+        .contentShape(Rectangle()) // スワイプ判定エリアを広げる
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if value.translation.width < -50 {
+                            viewModel.goNext()
+                        } else if value.translation.width > 50 {
+                            viewModel.goPrevious()
+                        }
+                    }
+                }
+        )
     }
 
     // MARK: - プログレス
@@ -211,13 +231,23 @@ struct AnswerInputView: View {
             viewModel.finishAnswering()
             dismiss()
         case .correct:
-            // 正解が未完了の場合は確認アラートを出す（#6対応）
-            if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
-                showIncompleteAlert = true
-                return
+            if viewModel.sheet.status == .correctInput {
+                // 正解先行パターン: 正解入力完了 → correctReady へ
+                if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
+                    showIncompleteAlert = true
+                    return
+                }
+                viewModel.finishCorrectInput()
+                dismiss()
+            } else {
+                // 回答先行パターン: 正解入力完了 → 採点
+                if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
+                    showIncompleteAlert = true
+                    return
+                }
+                viewModel.score()
+                dismiss()
             }
-            viewModel.score()
-            dismiss()
         }
     }
 }

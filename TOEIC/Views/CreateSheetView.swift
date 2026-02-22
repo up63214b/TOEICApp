@@ -9,6 +9,7 @@ struct CreateSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var title: String = ""
+    @State private var inputOrder: InputOrder = .answerFirst
     @FocusState private var isTitleFocused: Bool
 
     /// 作成後に解答シートを返す
@@ -27,6 +28,14 @@ struct CreateSheetView: View {
                 Section("シートタイトル") {
                     TextField("例: TOEIC公式問題集 Vol.10 Test1", text: $title)
                         .focused($isTitleFocused)
+                }
+
+                Section("最初に入力するもの") {
+                    Picker("入力順序", selection: $inputOrder) {
+                        Text("回答から始める").tag(InputOrder.answerFirst)
+                        Text("正解から始める").tag(InputOrder.correctFirst)
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 Section {
@@ -67,7 +76,7 @@ struct CreateSheetView: View {
     private func createSheet() {
         let sheetTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalTitle = sheetTitle.isEmpty ? defaultTitle : sheetTitle
-        let sheet = AnswerSheet(title: finalTitle)
+        let sheet = AnswerSheet(title: finalTitle, inputOrder: inputOrder)
         dataManager.addSheet(sheet)
         onCreated?(sheet)
         dismiss()

@@ -40,21 +40,34 @@ class DataManager: ObservableObject {
         saveSheets()
     }
 
+    /// 採点済みのシートのみを一括で削除する
+    func deleteScoredSheets() {
+        sheets.removeAll { $0.status == .scored }
+        saveSheets()
+    }
+
     func clearAllSheets() {
         sheets = []
         UserDefaults.standard.removeObject(forKey: sheetsKey)
     }
 
     private func saveSheets() {
-        if let encoded = try? JSONEncoder().encode(sheets) {
+        do {
+            let encoded = try JSONEncoder().encode(sheets)
             UserDefaults.standard.set(encoded, forKey: sheetsKey)
+        } catch {
+            // JSONエンコードに失敗した場合のエラーログ
+            print("⚠️ [DataManager] Failed to encode and save sheets: \(error)")
         }
     }
 
     private func loadSheets() {
-        if let data = UserDefaults.standard.data(forKey: sheetsKey),
-           let decoded = try? JSONDecoder().decode([AnswerSheet].self, from: data) {
-            sheets = decoded
+        guard let data = UserDefaults.standard.data(forKey: sheetsKey) else { return }
+        do {
+            sheets = try JSONDecoder().decode([AnswerSheet].self, from: data)
+        } catch {
+            // JSONデコードに失敗した場合のエラーログ
+            print("⚠️ [DataManager] Failed to decode sheets: \(error)")
         }
     }
 

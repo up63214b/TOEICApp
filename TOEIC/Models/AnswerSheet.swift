@@ -98,28 +98,40 @@ struct TOEICTemplate {
     }
 }
 
+// MARK: - 入力順序（回答先行 or 正解先行）
+enum InputOrder: String, Codable {
+    case answerFirst   // 回答 → 正解 → 採点（従来の動作）
+    case correctFirst  // 正解 → 回答 → 自動採点
+}
+
 // MARK: - 解答シートのステータス
 enum SheetStatus: String, Codable {
-    case answering    // 回答入力中
-    case answered     // 回答完了（正解未入力）
-    case scoring      // 正解入力中
-    case scored       // 採点完了
+    case answering      // 回答入力中
+    case answered       // 回答完了（正解未入力）
+    case scoring        // 正解入力中（回答先行パターン）
+    case scored         // 採点完了
+    case correctInput   // 正解入力中（正解先行パターン）
+    case correctReady   // 正解入力完了、回答待ち（正解先行パターン）
 
     var label: String {
         switch self {
-        case .answering: return "回答中"
-        case .answered:  return "回答完了"
-        case .scoring:   return "採点中"
-        case .scored:    return "採点済み"
+        case .answering:    return "回答中"
+        case .answered:     return "回答完了"
+        case .scoring:      return "採点中"
+        case .scored:       return "採点済み"
+        case .correctInput: return "正解入力中"
+        case .correctReady: return "正解入力済み"
         }
     }
 
     var color: String {
         switch self {
-        case .answering: return "blue"
-        case .answered:  return "orange"
-        case .scoring:   return "purple"
-        case .scored:    return "green"
+        case .answering:    return "blue"
+        case .answered:     return "orange"
+        case .scoring:      return "purple"
+        case .scored:       return "green"
+        case .correctInput: return "purple"
+        case .correctReady: return "orange"
         }
     }
 }
@@ -137,12 +149,25 @@ struct PartScore: Codable, Identifiable {
     }
 }
 
+// MARK: - 間違えた問題の情報
+struct WrongAnswer: Identifiable {
+    let questionNumber: Int
+    let userAnswer: String?   // nil = 未回答
+    let correctAnswer: String
+    let part: TOEICPart
+
+    var id: Int { questionNumber }
+}
+
 // MARK: - 解答シート
 struct AnswerSheet: Identifiable, Codable {
     let id: UUID
     var title: String
     var createdAt: Date
     var status: SheetStatus
+
+    /// 入力順序（回答先行 or 正解先行）
+    var inputOrder: InputOrder
 
     /// ユーザーの回答（1〜200、nilは未回答）
     var userAnswers: [String?]
@@ -153,14 +178,34 @@ struct AnswerSheet: Identifiable, Codable {
     /// タイマー経過秒数
     var elapsedSeconds: Int
 
-    init(title: String) {
+    init(title: String, inputOrder: InputOrder = .answerFirst) {
         self.id = UUID()
         self.title = title
         self.createdAt = Date()
-        self.status = .answering
+        self.inputOrder = inputOrder
+        // 正解先行の場合は correctInput から開始
+        self.status = inputOrder == .correctFirst ? .correctInput : .answering
         self.userAnswers = Array(repeating: nil, count: TOEICTemplate.totalQuestions)
         self.correctAnswers = Array(repeating: nil, count: TOEICTemplate.totalQuestions)
         self.elapsedSeconds = 0
+    }
+
+    // MARK: - Codable（既存データとの後方互換性）
+    // inputOrder が存在しない古いデータでも .answerFirst として読み込む
+    enum CodingKeys: String, CodingKey {
+        case id, title, createdAt, status, inputOrder, userAnswers, correctAnswers, elapsedSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        status = try container.decode(SheetStatus.self, forKey: .status)
+        inputOrder = try container.decodeIfPresent(InputOrder.self, forKey: .inputOrder) ?? .answerFirst
+        userAnswers = try container.decode([String?].self, forKey: .userAnswers)
+        correctAnswers = try container.decode([String?].self, forKey: .correctAnswers)
+        elapsedSeconds = try container.decode(Int.self, forKey: .elapsedSeconds)
     }
 
     // MARK: - 回答操作
@@ -252,6 +297,28 @@ struct AnswerSheet: Identifiable, Codable {
         let correct = readingParts.reduce(0) { $0 + $1.correct }
         let total = readingParts.reduce(0) { $0 + $1.total }
         return PartScore(part: .part5, correct: correct, total: total)
+    }
+
+    // MARK: - 間違い一覧
+
+    /// 間違えた問題の一覧（未回答も含む）
+    var wrongAnswers: [WrongAnswer] {
+        var result: [WrongAnswer] = []
+        for i in 0..<TOEICTemplate.totalQuestions {
+            let questionNumber = i + 1
+            if let correct = correctAnswers[i] {
+                let user = userAnswers[i]
+                if user != correct {
+                    result.append(WrongAnswer(
+                        questionNumber: questionNumber,
+                        userAnswer: user,
+                        correctAnswer: correct,
+                        part: TOEICTemplate.part(for: questionNumber)
+                    ))
+                }
+            }
+        }
+        return result
     }
 
     /// 経過時間フォーマット

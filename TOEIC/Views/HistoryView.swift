@@ -32,9 +32,8 @@ struct HistoryView: View {
             .alert("採点済みシートを全て削除しますか？", isPresented: $showClearAlert) {
                 Button("キャンセル", role: .cancel) {}
                 Button("削除する", role: .destructive) {
-                    for sheet in dataManager.scoredSheets {
-                        dataManager.deleteSheet(sheet)
-                    }
+                    // ループでの個別削除から一括削除メソッドの呼び出しに変更
+                    dataManager.deleteScoredSheets()
                 }
             } message: {
                 Text("採点済みの全シートが削除されます。この操作は元に戻せません。")
