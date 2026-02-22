@@ -11,6 +11,10 @@ struct CreateSheetView: View {
     @State private var title: String = ""
     @State private var inputOrder: InputOrder = .answerFirst
     
+    // エラーハンドリング用
+    @State private var errorMessage: String?
+    @State private var showingErrorAlert = false
+    
     var body: some View {
         NavigationStack {
             Form {
