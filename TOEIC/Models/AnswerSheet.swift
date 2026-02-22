@@ -44,7 +44,7 @@ final class AnswerSheet {
     }
     
     var correctAnswersEnteredCount: Int {
-        answers.filter { $0.selectedOption != nil }.count
+        answers.filter { $0.correctOption != nil }.count
     }
     
     var totalCorrect: Int {

@@ -16,7 +16,7 @@ struct HistoryView: View {
     private var averageScore: Double {
         guard !scoredSheets.isEmpty else { return 0 }
         let total = scoredSheets.reduce(0.0) { $0 + $1.scorePercentage }
-        return (total / Double(scoredSheets.isEmpty ? 1 : scoredSheets.count)) * 100
+        return (total / Double(scoredSheets.count)) * 100
     }
 
     var body: some View {

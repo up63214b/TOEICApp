@@ -16,6 +16,7 @@ struct HomeView: View {
     private var scoredSheets: [AnswerSheet]
     
     @State private var showingCreateSheet = false
+    @State private var showingStatistics = false
     @State private var activeViewModel: AnswerSheetViewModel?
 
     var body: some View {
@@ -30,6 +31,25 @@ struct HomeView: View {
                 floatingActionButton
             }
             .navigationTitle("TOEIC 解答シート")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showingStatistics = true
+                    } label: {
+                        Image(systemName: "chart.bar.xaxis")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingStatistics) {
+                NavigationStack {
+                    StatisticsView()
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("閉じる") { showingStatistics = false }
+                            }
+                        }
+                }
+            }
             .sheet(isPresented: $showingCreateSheet) {
                 CreateSheetView()
             }

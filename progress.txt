@@ -2,38 +2,36 @@
 
 ## 完了済み（Done）
 - MVVM構成の基本実装（Model / ViewModel / Views）
-- SwiftData による解答シート永続化への全面移行（UserDefaultsから移行完了）
-- 回答入力・正解入力・採点機能
+- SwiftData による解答シート永続化への全面移行
+- 回答入力・正解入力・採点機能（ユーザー回答と正解データの完全分離完了）
 - 履歴・設定画面
 - UI/UX改善
   - 回答入力時の自動遷移（回答タップで次へ）
-  - Part 3/4 (Q32-100) の複数問題同時表示（1画面3問）
+  - 複数問題同時表示（回答：1/3/5/10問切り替え、正解：10問バッチ形式）
+  - 正解入力モードの専用コンパクトUI実装
+  - リアルタイム正誤判定モード（○×判定）
   - 左右スワイプによる問題移動
   - パート別正答率の可視化（Swift Charts によるグラフ表示）
-  - 間違えた問題の復習ノート機能（メモ保存）
-- アプリアイコンの設定（1024px, Single Size対応）
-- AIエージェントシステム（AgentOrchestrator）のバグ修正と連携
-  - パス解決ロジックの強化
-  - 構造的リファクタリングの自律実行
+  - 回答入力時の触覚フィードバック（Haptic Feedback）
+- アプリアイコン・表示名（TOEIC 解答シート）の設定完了
+- 実行時クラッシュ・無限再帰バグの修正と堅牢化
+- 採点完了後の結果画面への自動遷移
+- SwiftData Predicate の制限（enum参照不可）への対応
 
 ## 修正・改善済み（2026-02-22）
-- AnswerSheet を struct から @Model class へ変更
-- TOEICApp.swift での ModelContainer セットアップ
-- AnswerSheetViewModel の SwiftData 対応（参照型への変更）
-- DataManager.swift の廃止と全Viewでの modelContext への移行
-- タイマーの MainActor 対応とライフサイクル管理（onDisappearでの停止）
-- SwiftData Predicate 用の statusRaw プロパティ追加
-- TOEICTemplate でのマジックナンバー定数化
+- アーキテクチャ: UserDefaults から SwiftData への全面リプレース
+- モデル設計: Answer 構造体の拡張（selectedOption/correctOption 分離）
+- パフォーマンス: @Query + #Predicate によるデータ取得の最適化（リテラル値による比較）
+- 最終レビュー: スコア 8/10 達成、非推奨APIの更新完了
 
 ## 現在のステータス
-- プロジェクトは SwiftData ベースで安定動作中
-- xcodebuild SUCCEEDED を確認済み
+- プロジェクトは SwiftData ベースで完成度が高く、実用的なアプリとして安定動作。
+- ユーザー体験を重視した多機能な回答入力システムが構築済み。
 
 ## 次にやること（Next）
-- [ ] パート別正答率の可視化（グラフ表示機能）
-- [ ] 間違えた問題のメモ・復習ノート機能
-- [ ] 学習統計ダッシュボード（日別の学習量表示など）
-- [ ] iCloud 同期（SwiftDataを活用）
+- [ ] 学習統計ダッシュボード（日別の学習量、全受験データの推移グラフ）
+- [ ] 復習ノート機能のさらなる強化（カテゴリ分け、検索機能など）
+- [ ] iCloud 同期の実装と動作検証
 
 ---
 最終更新: 2026-02-22

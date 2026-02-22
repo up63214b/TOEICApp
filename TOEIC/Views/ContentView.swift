@@ -24,7 +24,7 @@ struct ContentView: View {
                     Label("設定", systemImage: "gearshape.fill")
                 }
         }
-        .accentColor(.blue)
+        .tint(.blue)
     }
 }
 

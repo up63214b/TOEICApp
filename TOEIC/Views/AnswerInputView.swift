@@ -11,6 +11,9 @@ struct AnswerInputView: View {
     // 正解を表示するかどうかの設定
     @State private var showCorrectAnswers = false
     
+    // 採点結果を表示するかどうかの設定
+    @State private var showResult = false
+    
     // 正解入力モードが未完了の場合の警告
     @State private var showIncompleteAlert = false
 
@@ -83,6 +86,9 @@ struct AnswerInputView: View {
             }
             .sheet(isPresented: $viewModel.showGrid) {
                 QuestionGridView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showResult) {
+                ScoringResultView(sheet: viewModel.sheet)
             }
             .alert("正解入力が未完了です", isPresented: $showIncompleteAlert) {
                 Button("続ける", role: .cancel) {}
@@ -377,11 +383,18 @@ struct AnswerInputView: View {
     private func handleFinish() {
         switch viewModel.inputMode {
         case .answer:
-            viewModel.finishAnswering()
-            dismiss()
+            if viewModel.sheet.inputOrder == .correctFirst {
+                // 正解先行パターンの場合、回答完了時に即採点
+                viewModel.score()
+                showResult = true
+            } else {
+                // 通常パターン: 回答完了 -> 正解入力へ
+                viewModel.finishAnswering()
+                dismiss()
+            }
         case .correct:
             if viewModel.sheet.status == .correctInput {
-                // 正解先行パターン: 正解入力完了 → correctReady へ
+                // 正解先行パターン: 正解入力完了
                 if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
                     showIncompleteAlert = true
                     return
@@ -389,13 +402,13 @@ struct AnswerInputView: View {
                 viewModel.finishCorrectInput()
                 dismiss()
             } else {
-                // 回答先行パターン: 正解入力完了 → 採点
+                // 回答先行パターン: 回答後の正解入力完了 -> 採点
                 if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
                     showIncompleteAlert = true
                     return
                 }
                 viewModel.score()
-                dismiss()
+                showResult = true
             }
         }
     }
@@ -408,7 +421,12 @@ struct ChoiceButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // 触覚フィードバック
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            action()
+        }) {
             Text(label)
                 .font(.headline)
                 .fontWeight(.bold)

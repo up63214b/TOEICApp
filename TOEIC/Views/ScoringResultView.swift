@@ -64,7 +64,7 @@ struct ScoringResultView: View {
                     .frame(width: 160, height: 160)
 
                 Circle()
-                    .trim(from: 0, to: sheet.scorePercentage / 100)
+                    .trim(from: 0, to: sheet.scorePercentage)
                     .stroke(mainScoreColor, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .frame(width: 160, height: 160)
                     .rotationEffect(.degrees(-90))
