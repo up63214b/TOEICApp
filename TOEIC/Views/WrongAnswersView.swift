@@ -5,7 +5,7 @@ import SwiftUI
 
 struct WrongAnswersView: View {
 
-    @Bindable var sheet: AnswerSheet
+    @Bindable let sheet: AnswerSheet
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFilter: AnswerFilter = .all
     @State private var editingNoteAnswer: WrongAnswer?
@@ -216,7 +216,7 @@ struct WrongAnswersView: View {
 
 // MARK: - メモ編集用View
 struct NoteEditView: View {
-    @Bindable var sheet: AnswerSheet
+    @Bindable let sheet: AnswerSheet
     let questionNumber: Int
     @Environment(\.dismiss) private var dismiss
     @State private var note: String = ""

@@ -15,7 +15,7 @@ enum InputMode {
 @MainActor
 class AnswerSheetViewModel: ObservableObject, Identifiable {
 
-    @Published var sheet: AnswerSheet
+    @Published let sheet: AnswerSheet
     @Published var currentQuestion: Int = 1
     @Published var inputMode: InputMode = .answer
     @Published var isTimerRunning: Bool = false

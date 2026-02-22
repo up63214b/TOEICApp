@@ -9,7 +9,7 @@ struct SheetDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Bindable var sheet: AnswerSheet
+    @Bindable let sheet: AnswerSheet
     
     @State private var activeViewModel: AnswerSheetViewModel?
     @State private var showingDeleteAlert = false
