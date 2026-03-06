@@ -157,10 +157,6 @@ struct AnswerInputView: View {
             }
             .padding(.horizontal)
         }
-                }
-            }
-            .padding(.horizontal)
-        }
         // 左右スワイプで問題移動
         .contentShape(Rectangle())
         .gesture(
@@ -175,18 +171,6 @@ struct AnswerInputView: View {
                     }
                 }
         )
-    }
-
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .background(isCurrent ? Color.blue.opacity(0.08) : Color.clear)
-        .cornerRadius(10)
-        .onTapGesture {
-            viewModel.currentQuestion = qNumber
-        }
     }
 
     private func questionRow(for qNumber: Int) -> some View {
@@ -227,7 +211,7 @@ struct AnswerInputView: View {
                     }
                 } else if !isMultiSet && answer != nil {
                     // 単一表示かつ回答済みの場合のみ丸を表示
-                    Text(answer!)
+                    Text(answer ?? "")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)

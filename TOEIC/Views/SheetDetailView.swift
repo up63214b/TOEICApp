@@ -14,6 +14,7 @@ struct SheetDetailView: View {
     @State private var activeViewModel: AnswerSheetViewModel?
     @State private var showingDeleteAlert = false
     @State private var showingWrongAnswers = false
+    @State private var showingScoringResult = false
 
     var body: some View {
         List {
@@ -21,7 +22,7 @@ struct SheetDetailView: View {
                 statusRow
             }
             
-            if sheet.status == .scored {
+            if sheet.judgableCount > 0 {
                 Section(header: Text("パート別正解率")) {
                     performanceChart
                         .frame(height: 160)
@@ -68,6 +69,9 @@ struct SheetDetailView: View {
         .sheet(isPresented: $showingWrongAnswers) {
             WrongAnswersView(sheet: sheet)
         }
+        .sheet(isPresented: $showingScoringResult) {
+            ScoringResultView(sheet: sheet)
+        }
     }
 
     private var statusRow: some View {
@@ -95,48 +99,64 @@ struct SheetDetailView: View {
             } label: {
                 Label("解答を続ける", systemImage: "pencil")
             }
-            
+
         case .answered:
             Button {
                 activeViewModel = AnswerSheetViewModel(sheet: sheet)
             } label: {
                 Label("正解を入力する", systemImage: "checkmark.circle")
             }
-            
+
         case .scoring:
             Button {
                 activeViewModel = AnswerSheetViewModel(sheet: sheet)
             } label: {
                 Label("採点を再開する", systemImage: "divider.circle")
             }
-            
+
         case .scored:
+            Button {
+                showingScoringResult = true
+            } label: {
+                Label("採点結果を見る", systemImage: "chart.bar.fill")
+            }
+
             Button {
                 showingWrongAnswers = true
             } label: {
                 Label("間違えた問題を確認", systemImage: "xmark.circle")
             }
-            
+
             Button {
                 sheet.status = .answering
                 activeViewModel = AnswerSheetViewModel(sheet: sheet)
             } label: {
                 Label("もう一度解き直す", systemImage: "arrow.counterclockwise")
             }
-            
+
         case .correctInput:
             Button {
                 activeViewModel = AnswerSheetViewModel(sheet: sheet)
             } label: {
                 Label("正解入力を続ける", systemImage: "checkmark.seal")
             }
-            
+
         case .correctReady:
             Button {
                 activeViewModel = AnswerSheetViewModel(sheet: sheet)
             } label: {
                 Label("本番解答を開始", systemImage: "play.circle")
             }
+        }
+
+        // 途中経過ボタン（採点完了以外で、判定可能な問題がある場合）
+        if sheet.status != .scored && sheet.judgableCount > 0 {
+            Button {
+                showingScoringResult = true
+            } label: {
+                Label("途中経過を見る（\(sheet.judgableCount)問）", systemImage: "chart.bar")
+            }
+            .foregroundColor(.orange)
         }
     }
 

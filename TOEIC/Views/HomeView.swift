@@ -73,11 +73,9 @@ struct HomeView: View {
             if !activeSheets.isEmpty {
                 Section(header: Text("実施中")) {
                     ForEach(activeSheets) { sheet in
-                        SheetRowView(sheet: sheet)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                activeViewModel = AnswerSheetViewModel(sheet: sheet)
-                            }
+                        NavigationLink(destination: SheetDetailView(sheet: sheet)) {
+                            SheetRowView(sheet: sheet)
+                        }
                     }
                     .onDelete(perform: deleteActiveSheets)
                 }

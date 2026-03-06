@@ -10,6 +10,13 @@ struct ScoringResultView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showWrongAnswers = false
 
+    // 途中経過かどうか
+    private var isPartial: Bool { sheet.status != .scored }
+    // 表示用の分母
+    private var denominator: Int { isPartial ? sheet.judgableCount : TOEICTemplate.totalQuestions }
+    // 途中経過時は判定可能な問題だけで計算
+    private var displayPartScores: [PartScore] { sheet.partScores(judgableOnly: isPartial) }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -41,7 +48,7 @@ struct ScoringResultView: View {
             .sheet(isPresented: $showWrongAnswers) {
                 WrongAnswersView(sheet: sheet)
             }
-            .navigationTitle("採点結果")
+            .navigationTitle(isPartial ? "途中経過" : "採点結果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -58,6 +65,18 @@ struct ScoringResultView: View {
                 .font(.headline)
                 .foregroundColor(.secondary)
 
+            // 途中経過バッジ
+            if isPartial {
+                Text("途中経過（\(sheet.judgableCount)問判定済み）")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.orange)
+                    .cornerRadius(12)
+            }
+
             ZStack {
                 Circle()
                     .stroke(Color(.systemGray5), lineWidth: 12)
@@ -72,11 +91,10 @@ struct ScoringResultView: View {
                 VStack(spacing: 4) {
                     Text("\(sheet.totalCorrect)")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
-                    Text("/ \(TOEICTemplate.totalQuestions)")
+                    Text("/ \(denominator)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Text(String(format: "%.1f%%", sheet.scorePercentage))
-
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(mainScoreColor)
@@ -101,7 +119,7 @@ struct ScoringResultView: View {
                 .font(.headline)
             
             Chart {
-                ForEach(sheet.partScores) { partScore in
+                ForEach(displayPartScores) { partScore in
                     BarMark(
                         x: .value("パート", "P\(partScore.part.rawValue)"),
                         y: .value("正解率", partScore.percentage)
@@ -109,7 +127,7 @@ struct ScoringResultView: View {
                     .foregroundStyle(barColor(for: partScore.percentage).gradient)
                     .cornerRadius(4)
                 }
-                
+
                 RuleMark(y: .value("平均", sheet.scorePercentage))
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
                     .foregroundStyle(.secondary)
@@ -139,13 +157,13 @@ struct ScoringResultView: View {
             sectionCard(
                 title: "Listening",
                 icon: "headphones",
-                score: sheet.listeningPartScore,
+                score: sheet.sectionPartScore(range: 1...100, part: .part1, judgableOnly: isPartial),
                 color: .blue
             )
             sectionCard(
                 title: "Reading",
                 icon: "doc.text",
-                score: sheet.readingPartScore,
+                score: sheet.sectionPartScore(range: 101...200, part: .part5, judgableOnly: isPartial),
                 color: .purple
             )
         }
@@ -183,7 +201,7 @@ struct ScoringResultView: View {
             Text("パート別内訳")
                 .font(.headline)
 
-            ForEach(sheet.partScores) { partScore in
+            ForEach(displayPartScores) { partScore in
                 partRow(partScore)
             }
         }

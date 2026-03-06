@@ -34,11 +34,15 @@ final class AnswerSheet {
     }
     
     // MARK: - 計算プロパティ
+
+    // 判定可能な問題数（回答＆正解の両方が入力済み）
+    var judgableCount: Int {
+        answers.filter { $0.selectedOption != nil && $0.correctOption != nil }.count
+    }
+
     var scorePercentage: Double {
-        guard status == .scored else { return 0.0 }
-        let answered = answers.filter { $0.selectedOption != nil && $0.correctOption != nil }.count
-        guard answered > 0 else { return 0.0 }
-        return Double(totalCorrect) / Double(answered) * 100
+        guard judgableCount > 0 else { return 0.0 }
+        return Double(totalCorrect) / Double(judgableCount) * 100
     }
 
     var answeredCount: Int {
@@ -74,27 +78,37 @@ final class AnswerSheet {
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
-    var partScores: [PartScore] {
+    // judgableOnly: true の場合、判定可能な問題数を total にする
+    func partScores(judgableOnly: Bool = false) -> [PartScore] {
         TOEICPart.allCases.map { part in
             let range = TOEICTemplate.range(for: part)
             let partAnswers = answers.filter { range.contains($0.questionNumber) }
             let correctCount = partAnswers.filter { $0.isCorrect == true }.count
-            return PartScore(part: part, correct: correctCount, total: partAnswers.count)
+            let total = judgableOnly
+                ? partAnswers.filter { $0.selectedOption != nil && $0.correctOption != nil }.count
+                : partAnswers.count
+            return PartScore(part: part, correct: correctCount, total: total)
         }
     }
-    
-    var listeningPartScore: PartScore {
-        let range = 1...100
+
+    // 既存コードとの互換性のため残す
+    var partScores: [PartScore] { partScores() }
+
+    func sectionPartScore(range: ClosedRange<Int>, part: TOEICPart, judgableOnly: Bool = false) -> PartScore {
         let partAnswers = answers.filter { range.contains($0.questionNumber) }
         let correctCount = partAnswers.filter { $0.isCorrect == true }.count
-        return PartScore(part: .part1, correct: correctCount, total: 100)
+        let total = judgableOnly
+            ? partAnswers.filter { $0.selectedOption != nil && $0.correctOption != nil }.count
+            : partAnswers.count
+        return PartScore(part: part, correct: correctCount, total: total)
     }
-    
+
+    var listeningPartScore: PartScore {
+        sectionPartScore(range: 1...100, part: .part1)
+    }
+
     var readingPartScore: PartScore {
-        let range = 101...200
-        let partAnswers = answers.filter { range.contains($0.questionNumber) }
-        let correctCount = partAnswers.filter { $0.isCorrect == true }.count
-        return PartScore(part: .part5, correct: correctCount, total: 100)
+        sectionPartScore(range: 101...200, part: .part5)
     }
 
     // MARK: - メソッド
