@@ -29,16 +29,24 @@
 - force unwrap（answer!）を安全な `answer ?? ""` に変更
 - ビルド成功確認済み（iPhone 17 Pro Simulator）
 
+## 修正・改善済み（2026-03-06）
+- App Store 公開準備: PrivacyInfo.xcprivacy（Privacy Manifest）を追加
+  - NSPrivacyTracking=false, NSPrivacyAccessedAPICategoryFileTimestamp (C617.1)
+- ビルド成功確認済み（iPhone 17 Pro Simulator）
+
 ## 現在のステータス
 - プロジェクトは SwiftData ベースで完成度が高く、ビルド・動作可能な状態。
-- ローンチ最低限の品質は確保済み。実機での動作確認を推奨。
+- Privacy Manifest 追加済み。App Store 提出の技術的準備は完了。
+- Apple Developer Program 登録待ち。
 
 ## 次にやること（Next）
-- [ ] 実機での動作確認・テスト
-- [ ] App Store Connect への提出準備（スクリーンショット、説明文など）
+- [ ] Apple Developer Program 登録（$99/年）→ https://developer.apple.com/programs/
+- [ ] App Store Connect でアプリ登録（名前、バンドルID、SKU 等）
+- [ ] Xcode GUI から Archive → Distribute App → App Store Connect
+- [ ] スクリーンショット・説明文・プライバシーポリシーURL を用意して審査提出
 - [ ] 学習統計ダッシュボード（日別の学習量、全受験データの推移グラフ）
 - [ ] 復習ノート機能のさらなる強化（カテゴリ分け、検索機能など）
 - [ ] iCloud 同期の実装と動作検証
 
 ---
-最終更新: 2026-02-26
+最終更新: 2026-03-06
