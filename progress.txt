@@ -1,48 +1,44 @@
 # Progress Memory - TOEICApp（進捗メモリ）
-# AIはセッション開始時にこのファイルを読み、終了時に更新すること
 
 ## 完了済み（Done）
 - MVVM構成の基本実装（Model / ViewModel / Views）
-- UserDefaults による解答シート永続化
-- 回答入力・正解入力・採点機能
+- SwiftData による解答シート永続化への全面移行
+- 回答入力・正解入力・採点機能（ユーザー回答と正解データの完全分離完了）
 - 履歴・設定画面
-- AIエージェントシステム（6体 + coordinator.sh）
-- AIエージェントインフラ整備（config.sh / prompts/ 作成、utils.sh バグ修正）
-- AIレビュー結果の適用（#1~#4, #6, #7, #9）
+- UI/UX改善
+  - 回答入力時の自動遷移（回答タップで次へ）
+  - 複数問題同時表示（回答：1/3/5/10問切り替え、正解：10問バッチ形式）
+  - 正解入力モードの専用コンパクトUI実装
+  - リアルタイム正誤判定モード（○×判定）
+  - 左右スワイプによる問題移動
+  - パート別正答率の可視化（Swift Charts によるグラフ表示）
+  - 回答入力時の触覚フィードバック（Haptic Feedback）
+- アプリアイコン・表示名（TOEIC 解答シート）の設定完了
+- 実行時クラッシュ・無限再帰バグの修正と堅牢化
+- 採点完了後の結果画面への自動遷移
+- SwiftData Predicate の制限（enum参照不可）への対応
 
-## AIレビュー適用済み修正内容
-- #1/#2 HomeView: fullScreenCover(item:) パターンに変更（ViewModel再生成バグ解消）
-- #3 DataManager: @MainActor 付与（メインスレッド安全性確保）
-- #4 HistoryView: DateFormatter を static let に変更（毎回生成コスト削減）
-- #6 AnswerInputView: 正解未完了時に確認アラートを表示
-- #7 AnswerInputView: startTimer() の onAppear にコメント追加
-- #9 HomeView: 採点済み5件制限のヘッダー案内を追加
+## 修正・改善済み（2026-02-22）
+- アーキテクチャ: UserDefaults から SwiftData への全面リプレース
+- モデル設計: Answer 構造体の拡張（selectedOption/correctOption 分離）
+- パフォーマンス: @Query + #Predicate によるデータ取得の最適化（リテラル値による比較）
+- 最終レビュー: スコア 8/10 達成、非推奨APIの更新完了
 
-## エージェント設定レビュー・修正（2026-02-19完了）
-- reviewer.md: レビュー対象を .agents/ 配下に更新、TOEICドメイン知識追加、前回結果参照ルール修正
-- improver.md: 追加指示の参照元明記、info修正の緩和、自信がない場合のskipルール追加
-- verifier.md: verdict判定基準を明示、保守的判定ルール追加、構文検証の正直な記述、new_concerns対応定義
-- ux-analyst.md: コード推測の注記追加、HIG準拠の観点追加、measurement フィールド追加
-- test-writer.md: TOEIC固有テスト対象追記、ViewInspector削除しXCTest限定、配置先明記、テストターゲット作成提案
-- feature-proposer.md: 現在の機能一覧追加、effort_estimate基準明示、next_steps フィールド追加
-- config.sh: IMPROVER_INSTRUCTION を空にし improver.md に一元化、verifier単体モード追加、タイムアウト設定追加
-- CLAUDE.md 新規作成（プロジェクト固有ルール・アーキテクチャ・ドメイン知識）
-- lessons.md 新規作成（初期教訓3件）
-- runner.sh: 空出力バリデーション追加
+## 修正・改善済み（2026-02-26）
+- AnswerInputView.swift のコード破損修正（重複した閉じ括弧・孤立コード断片の削除）
+- force unwrap（answer!）を安全な `answer ?? ""` に変更
+- ビルド成功確認済み（iPhone 17 Pro Simulator）
 
-## プロジェクト構造整理（2026-02-19完了）
-- scripts/ai-agents/ 削除（旧AIエージェントシステムを完全削除）
-- .agents/output/ の蓄積ファイルをクリア、.gitignore に追加
-- Xcode プロジェクトをフラット化: TOEICApp/TOEICApp/{TOEIC.xcodeproj, TOEIC/} → TOEICApp/{TOEIC.xcodeproj, TOEIC/}
-- xcodebuild -list で動作確認済み
-
-## 現在作業中（In Progress）
-- なし
+## 現在のステータス
+- プロジェクトは SwiftData ベースで完成度が高く、ビルド・動作可能な状態。
+- ローンチ最低限の品質は確保済み。実機での動作確認を推奨。
 
 ## 次にやること（Next）
-- Xcodeでビルド確認（AIレビュー修正適用後）
-- 残りのinfo指摘（#10: listeningScore/readingScore のPartScore分離）は検討中
-- エージェントシステムの実行テスト（修正後の動作確認）
+- [ ] 実機での動作確認・テスト
+- [ ] App Store Connect への提出準備（スクリーンショット、説明文など）
+- [ ] 学習統計ダッシュボード（日別の学習量、全受験データの推移グラフ）
+- [ ] 復習ノート機能のさらなる強化（カテゴリ分け、検索機能など）
+- [ ] iCloud 同期の実装と動作検証
 
 ---
-最終更新: 2026-02-19
+最終更新: 2026-02-26

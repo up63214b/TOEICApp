@@ -7,7 +7,14 @@ struct AnswerInputView: View {
 
     @ObservedObject var viewModel: AnswerSheetViewModel
     @Environment(\.dismiss) private var dismiss
-    // 正解入力が未完了のまま完了ボタンが押された場合の確認アラート（#6対応）
+    
+    // 正解を表示するかどうかの設定
+    @State private var showCorrectAnswers = false
+    
+    // 採点結果を表示するかどうかの設定
+    @State private var showResult = false
+    
+    // 正解入力モードが未完了の場合の警告
     @State private var showIncompleteAlert = false
 
     var body: some View {
@@ -40,20 +47,53 @@ struct AnswerInputView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        viewModel.showGrid = true
-                    } label: {
-                        Image(systemName: "square.grid.3x3")
+                    HStack(spacing: 16) {
+                        // 回答 / 正解入力モード切り替えトグル
+                        Button {
+                            withAnimation {
+                                if viewModel.inputMode == .answer {
+                                    viewModel.inputMode = .correct
+                                } else {
+                                    viewModel.inputMode = .answer
+                                }
+                            }
+                        } label: {
+                            Image(systemName: viewModel.inputMode == .answer ? "pencil.circle" : "checkmark.circle.fill")
+                                .foregroundColor(viewModel.inputMode == .answer ? .blue : .green)
+                        }
+                        
+                        // 正解を表示して確認するトグル（目のアイコン）
+                        Button {
+                            showCorrectAnswers.toggle()
+                        } label: {
+                            Image(systemName: showCorrectAnswers ? "eye.fill" : "eye.slash")
+                                .foregroundColor(showCorrectAnswers ? .green : .secondary)
+                        }
+
+                        Button {
+                            viewModel.showGrid = true
+                        } label: {
+                            Image(systemName: "square.grid.3x3")
+                        }
                     }
                 }
             }
             .sheet(isPresented: $viewModel.showGrid) {
                 QuestionGridView(viewModel: viewModel)
             }
+            .sheet(isPresented: $showResult) {
+                ScoringResultView(sheet: viewModel.sheet)
+            }
             .alert("正解入力が未完了です", isPresented: $showIncompleteAlert) {
                 Button("続ける", role: .cancel) {}
                 Button("このまま閉じる", role: .destructive) {
-                    viewModel.score()
+                    if viewModel.sheet.status == .correctInput {
+                        // 正解先行パターン: 未完了でも correctReady に遷移
+                        viewModel.finishCorrectInput()
+                    } else {
+                        // 回答先行パターン: 未完了でも採点
+                        viewModel.score()
+                    }
                     dismiss()
                 }
             } message: {
@@ -64,6 +104,9 @@ struct AnswerInputView: View {
                 if viewModel.inputMode == .answer {
                     viewModel.startTimer()
                 }
+            }
+            .onDisappear {
+                viewModel.stopTimer()
             }
         }
     }
@@ -106,35 +149,112 @@ struct AnswerInputView: View {
 
     // MARK: - 問題セクション
     private var questionSection: some View {
-        VStack(spacing: 32) {
-            // 問題番号
-            Text("Q\(viewModel.currentQuestion)")
-                .font(.system(size: 64, weight: .bold, design: .rounded))
-                .foregroundColor(.primary)
-
-            // 選択肢ボタン
-            HStack(spacing: 16) {
-                ForEach(viewModel.choiceLabels, id: \.self) { choice in
-                    ChoiceButton(
-                        label: choice,
-                        isSelected: viewModel.currentAnswer == choice,
-                        action: {
-                            viewModel.selectChoice(choice)
-                        }
-                    )
+        ScrollView {
+            VStack(spacing: 24) {
+                ForEach(viewModel.currentQuestionRange, id: \.self) { qNumber in
+                    questionRow(for: qNumber)
                 }
             }
-            .padding(.horizontal, 20)
-
-            // クリアボタン
-            if viewModel.currentAnswer != nil {
-                Button {
-                    viewModel.clearCurrentAnswer()
-                } label: {
-                    Text("クリア")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            .padding(.horizontal)
+        }
+        // 左右スワイプで問題移動
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if value.translation.width < -50 {
+                            viewModel.goNext()
+                        } else if value.translation.width > 50 {
+                            viewModel.goPrevious()
+                        }
+                    }
                 }
+        )
+    }
+
+    private func questionRow(for qNumber: Int) -> some View {
+        let isCurrent = viewModel.currentQuestion == qNumber
+        let index = qNumber - 1
+        let answer = viewModel.sheet.answers[index].selectedOption
+        let correct = viewModel.sheet.answers[index].correctOption
+        let labels = TOEICTemplate.choiceLabels(for: qNumber)
+        
+        let isMultiSet = (32...100).contains(qNumber)
+
+        return VStack(spacing: 12) {
+            HStack {
+                Text("Q\(qNumber)")
+                    .font(.system(size: isMultiSet ? 24 : (isCurrent ? 32 : 24), weight: .bold, design: .rounded))
+                    .foregroundColor(isCurrent ? .blue : .secondary)
+                
+                Spacer()
+                
+                if showCorrectAnswers {
+                    // 正答確認モード
+                    HStack(spacing: 8) {
+                        if let answer = answer, let correct = correct {
+                            Image(systemName: answer == correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(answer == correct ? .green : .red)
+                                .font(.headline)
+                        }
+                        
+                        if let correct = correct {
+                            Text(correct)
+                                .font(.headline)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("-")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } else if !isMultiSet && answer != nil {
+                    // 単一表示かつ回答済みの場合のみ丸を表示
+                    Text(answer ?? "")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.horizontal)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation {
+                    viewModel.currentQuestion = qNumber
+                }
+            }
+
+            // 選択肢の表示ロジック
+            // Q32-100 (isMultiSet) の場合は常に表示。それ以外は isCurrent の場合のみ。
+            if isMultiSet || isCurrent {
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        ForEach(labels, id: \.self) { choice in
+                            let isSelected = (viewModel.inputMode == .answer ? answer : correct) == choice
+                            
+                            ChoiceButton(
+                                label: choice,
+                                isSelected: isSelected,
+                                action: {
+                                    viewModel.currentQuestion = qNumber
+                                    viewModel.selectChoice(choice)
+                                }
+                            )
+                        }
+                    }
+                    
+                    if isMultiSet && isCurrent {
+                        // 3問セットのときはどれを選択中か分かりやすくアンダーライン
+                        Rectangle()
+                            .fill(Color.blue)
+                            .frame(height: 2)
+                            .padding(.horizontal, 4)
+                    }
+                }
+                .transition(.opacity.combined(with: .scale))
             }
         }
     }
@@ -158,7 +278,9 @@ struct AnswerInputView: View {
         HStack(spacing: 20) {
             // 前へ
             Button {
-                viewModel.goPrevious()
+                withAnimation {
+                    viewModel.goPrevious()
+                }
             } label: {
                 HStack {
                     Image(systemName: "chevron.left")
@@ -170,10 +292,10 @@ struct AnswerInputView: View {
                 .foregroundColor(.primary)
                 .cornerRadius(12)
             }
-            .disabled(viewModel.currentQuestion <= 1)
+            .disabled(viewModel.currentQuestionRange.lowerBound <= 1)
 
             // 次へ / 完了
-            if viewModel.currentQuestion >= TOEICTemplate.totalQuestions {
+            if viewModel.currentQuestionRange.upperBound >= TOEICTemplate.totalQuestions {
                 Button {
                     handleFinish()
                 } label: {
@@ -187,7 +309,9 @@ struct AnswerInputView: View {
                 }
             } else {
                 Button {
-                    viewModel.goNext()
+                    withAnimation {
+                        viewModel.goNext()
+                    }
                 } label: {
                     HStack {
                         Text("次へ")
@@ -208,16 +332,33 @@ struct AnswerInputView: View {
     private func handleFinish() {
         switch viewModel.inputMode {
         case .answer:
-            viewModel.finishAnswering()
-            dismiss()
-        case .correct:
-            // 正解が未完了の場合は確認アラートを出す（#6対応）
-            if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
-                showIncompleteAlert = true
-                return
+            if viewModel.sheet.inputOrder == .correctFirst {
+                // 正解先行パターンの場合、回答完了時に即採点
+                viewModel.score()
+                showResult = true
+            } else {
+                // 通常パターン: 回答完了 -> 正解入力へ
+                viewModel.finishAnswering()
+                dismiss()
             }
-            viewModel.score()
-            dismiss()
+        case .correct:
+            if viewModel.sheet.status == .correctInput {
+                // 正解先行パターン: 正解入力完了
+                if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
+                    showIncompleteAlert = true
+                    return
+                }
+                viewModel.finishCorrectInput()
+                dismiss()
+            } else {
+                // 回答先行パターン: 回答後の正解入力完了 -> 採点
+                if viewModel.sheet.correctAnswersEnteredCount < TOEICTemplate.totalQuestions {
+                    showIncompleteAlert = true
+                    return
+                }
+                viewModel.score()
+                showResult = true
+            }
         }
     }
 }
@@ -229,20 +370,26 @@ struct ChoiceButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(action: {
+            // 触覚フィードバック
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            action()
+        }) {
             Text(label)
-                .font(.title)
+                .font(.headline)
                 .fontWeight(.bold)
-                .frame(width: 64, height: 64)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
                 .background(isSelected ? Color.blue : Color(.systemGray5))
                 .foregroundColor(isSelected ? .white : .primary)
-                .cornerRadius(16)
+                .cornerRadius(12)
         }
     }
 }
 
 #Preview {
     let sheet = AnswerSheet(title: "テスト")
-    let vm = AnswerSheetViewModel(sheet: sheet, dataManager: DataManager.shared)
+    let vm = AnswerSheetViewModel(sheet: sheet)
     AnswerInputView(viewModel: vm)
 }

@@ -2,11 +2,20 @@
 // TOEICApp - 採点結果画面
 
 import SwiftUI
+import Charts
 
 struct ScoringResultView: View {
 
     let sheet: AnswerSheet
     @Environment(\.dismiss) private var dismiss
+    @State private var showWrongAnswers = false
+
+    // 途中経過かどうか
+    private var isPartial: Bool { sheet.status != .scored }
+    // 表示用の分母
+    private var denominator: Int { isPartial ? sheet.judgableCount : TOEICTemplate.totalQuestions }
+    // 途中経過時は判定可能な問題だけで計算
+    private var displayPartScores: [PartScore] { sheet.partScores(judgableOnly: isPartial) }
 
     var body: some View {
         NavigationStack {
@@ -15,11 +24,19 @@ struct ScoringResultView: View {
                     // メインスコア
                     mainScoreSection
 
+                    // グラフセクション
+                    chartSection
+
                     // Listening / Reading
                     sectionScores
 
                     // パート別内訳
                     partBreakdown
+
+                    // 間違えた問題ボタン
+                    if !sheet.wrongAnswers.isEmpty {
+                        wrongAnswersButton
+                    }
 
                     // 時間
                     if sheet.elapsedSeconds > 0 {
@@ -28,7 +45,10 @@ struct ScoringResultView: View {
                 }
                 .padding()
             }
-            .navigationTitle("採点結果")
+            .sheet(isPresented: $showWrongAnswers) {
+                WrongAnswersView(sheet: sheet)
+            }
+            .navigationTitle(isPartial ? "途中経過" : "採点結果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -45,6 +65,18 @@ struct ScoringResultView: View {
                 .font(.headline)
                 .foregroundColor(.secondary)
 
+            // 途中経過バッジ
+            if isPartial {
+                Text("途中経過（\(sheet.judgableCount)問判定済み）")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.orange)
+                    .cornerRadius(12)
+            }
+
             ZStack {
                 Circle()
                     .stroke(Color(.systemGray5), lineWidth: 12)
@@ -59,7 +91,7 @@ struct ScoringResultView: View {
                 VStack(spacing: 4) {
                     Text("\(sheet.totalCorrect)")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
-                    Text("/ \(TOEICTemplate.totalQuestions)")
+                    Text("/ \(denominator)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Text(String(format: "%.1f%%", sheet.scorePercentage))
@@ -80,19 +112,58 @@ struct ScoringResultView: View {
         }
     }
 
+    // MARK: - パフォーマンスグラフ
+    private var chartSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("パート別正解率 (%)")
+                .font(.headline)
+            
+            Chart {
+                ForEach(displayPartScores) { partScore in
+                    BarMark(
+                        x: .value("パート", "P\(partScore.part.rawValue)"),
+                        y: .value("正解率", partScore.percentage)
+                    )
+                    .foregroundStyle(barColor(for: partScore.percentage).gradient)
+                    .cornerRadius(4)
+                }
+
+                RuleMark(y: .value("平均", sheet.scorePercentage))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                    .foregroundStyle(.secondary)
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("平均")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+            }
+            .frame(height: 180)
+            .chartYScale(domain: 0...100)
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisValueLabel()
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+
     // MARK: - Listening / Reading セクション
     private var sectionScores: some View {
         HStack(spacing: 16) {
             sectionCard(
                 title: "Listening",
                 icon: "headphones",
-                score: sheet.listeningScore,
+                score: sheet.sectionPartScore(range: 1...100, part: .part1, judgableOnly: isPartial),
                 color: .blue
             )
             sectionCard(
                 title: "Reading",
                 icon: "doc.text",
-                score: sheet.readingScore,
+                score: sheet.sectionPartScore(range: 101...200, part: .part5, judgableOnly: isPartial),
                 color: .purple
             )
         }
@@ -114,6 +185,7 @@ struct ScoringResultView: View {
                 .fontWeight(.bold)
 
             Text(String(format: "%.1f%%", score.percentage))
+
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -129,7 +201,7 @@ struct ScoringResultView: View {
             Text("パート別内訳")
                 .font(.headline)
 
-            ForEach(sheet.partScores) { partScore in
+            ForEach(displayPartScores) { partScore in
                 partRow(partScore)
             }
         }
@@ -162,7 +234,7 @@ struct ScoringResultView: View {
 
                     RoundedRectangle(cornerRadius: 4)
                         .fill(barColor(for: partScore.percentage))
-                        .frame(width: geometry.size.width * (partScore.percentage / 100), height: 8)
+                        .frame(width: geometry.size.width * min(partScore.percentage / 100, 1.0), height: 8)
                 }
             }
             .frame(height: 8)
@@ -174,6 +246,31 @@ struct ScoringResultView: View {
         case 80...100: return .green
         case 60..<80:  return .orange
         default:       return .red
+        }
+    }
+
+    // MARK: - 間違えた問題ボタン
+    private var wrongAnswersButton: some View {
+        Button {
+            showWrongAnswers = true
+        } label: {
+            HStack {
+                Image(systemName: "xmark.circle")
+                    .foregroundColor(.red)
+                Text("間違えた問題を見る")
+                    .fontWeight(.medium)
+                Spacer()
+                Text("\(sheet.wrongAnswers.count)問")
+                    .foregroundColor(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .foregroundColor(.primary)
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
         }
     }
 

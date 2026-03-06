@@ -2,17 +2,16 @@
 // TOEIC - アプリエントリーポイント
 
 import SwiftUI
+import SwiftData
 
 @main
 struct TOEICApp: App {
 
-    // DataManagerをアプリ全体で共有
-    @StateObject private var dataManager = DataManager.shared
-
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(dataManager)
         }
+        // View階層全体でSwiftDataのコンテナ（データベース）を利用可能にする
+        .modelContainer(for: AnswerSheet.self)
     }
 }

@@ -1,264 +1,199 @@
 // SheetDetailView.swift
-// TOEICApp - 解答シート詳細画面
+// TOEICApp - シート詳細画面 (SwiftData対応)
 
 import SwiftUI
+import SwiftData
+import Charts
 
 struct SheetDetailView: View {
-
-    @EnvironmentObject var dataManager: DataManager
-    @State var sheet: AnswerSheet
-    @State private var activeViewModel: AnswerSheetViewModel?  // VM を事前生成して保持
-    @State private var showScoringResult = false
-    @State private var showDeleteAlert = false
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    
+    @Bindable var sheet: AnswerSheet
+    
+    @State private var activeViewModel: AnswerSheetViewModel?
+    @State private var showingDeleteAlert = false
+    @State private var showingWrongAnswers = false
+    @State private var showingScoringResult = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // ステータスカード
-                statusCard
-
-                // 進捗情報
-                progressCard
-
-                // アクションボタン
-                actionButtons
-
-                // タイマー情報
-                if sheet.elapsedSeconds > 0 {
-                    timerCard
+        List {
+            Section(header: Text("ステータス")) {
+                statusRow
+            }
+            
+            if sheet.judgableCount > 0 {
+                Section(header: Text("パート別正解率")) {
+                    performanceChart
+                        .frame(height: 160)
+                        .padding(.vertical, 8)
                 }
             }
-            .padding()
+            
+            Section(header: Text("アクション")) {
+                actionButtons
+            }
+            
+            Section(header: Text("シート情報")) {
+                HStack {
+                    Text("作成日")
+                    Spacer()
+                    Text(sheet.createdAt, style: .date)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Section {
+                Button(role: .destructive) {
+                    showingDeleteAlert = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("このシートを削除")
+                    }
+                }
+            }
         }
         .navigationTitle(sheet.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    if sheet.status != .scored {
-                        Button(role: .destructive) {
-                            showDeleteAlert = true
-                        } label: {
-                            Label("削除", systemImage: "trash")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
-        .alert("解答シートを削除しますか？", isPresented: $showDeleteAlert) {
+        .alert("シートの削除", isPresented: $showingDeleteAlert) {
             Button("キャンセル", role: .cancel) {}
             Button("削除する", role: .destructive) {
-                dataManager.deleteSheet(sheet)
-                dismiss()
+                deleteSheet()
             }
         } message: {
-            Text("この解答シートを削除します。この操作は元に戻せません。")
+            Text("この解答シートを削除してもよろしいですか？")
         }
-        .fullScreenCover(item: $activeViewModel, onDismiss: {
-            // カバーを閉じたらシートを再読み込み
-            reloadSheet()
-        }) { vm in
+        .fullScreenCover(item: $activeViewModel) { vm in
             AnswerInputView(viewModel: vm)
         }
-        .sheet(isPresented: $showScoringResult) {
-            reloadSheet()
-        } content: {
+        .sheet(isPresented: $showingWrongAnswers) {
+            WrongAnswersView(sheet: sheet)
+        }
+        .sheet(isPresented: $showingScoringResult) {
             ScoringResultView(sheet: sheet)
         }
     }
 
-    // MARK: - ステータスカード
-    private var statusCard: some View {
+    private var statusRow: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ステータス")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Text(sheet.status.label)
-                    .font(.title3)
-                    .fontWeight(.bold)
-            }
-
+            Text(sheet.status.label)
+                .font(.headline)
             Spacer()
-
-            statusBadge
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-    }
-
-    private var statusBadge: some View {
-        let color = statusColor
-        return Circle()
-            .fill(color.opacity(0.15))
-            .frame(width: 48, height: 48)
-            .overlay(
-                Image(systemName: statusIcon)
-                    .foregroundColor(color)
-                    .font(.title3)
-            )
-    }
-
-    private var statusColor: Color {
-        switch sheet.status {
-        case .answering: return .blue
-        case .answered:  return .orange
-        case .scoring:   return .purple
-        case .scored:    return .green
-        }
-    }
-
-    private var statusIcon: String {
-        switch sheet.status {
-        case .answering: return "pencil"
-        case .answered:  return "checkmark.circle"
-        case .scoring:   return "doc.text.magnifyingglass"
-        case .scored:    return "star.fill"
-        }
-    }
-
-    // MARK: - 進捗カード
-    private var progressCard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("回答状況")
-                    .font(.headline)
-                Spacer()
-                Text("\(sheet.answeredCount) / \(TOEICTemplate.totalQuestions)")
-                    .font(.subheadline)
+            if sheet.status == .scored {
+                Text("\(sheet.totalCorrect) / 200")
+                    .font(.title2.bold())
+                    .foregroundColor(.blue)
+            } else {
+                Text("\(sheet.answeredCount) / 200 入力済")
                     .foregroundColor(.secondary)
             }
-
-            ProgressView(value: Double(sheet.answeredCount), total: Double(TOEICTemplate.totalQuestions))
-                .tint(.blue)
-
-            if sheet.status == .scoring || sheet.status == .scored {
-                HStack {
-                    Text("正解入力")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(sheet.correctAnswersEnteredCount) / \(TOEICTemplate.totalQuestions)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                ProgressView(value: Double(sheet.correctAnswersEnteredCount), total: Double(TOEICTemplate.totalQuestions))
-                    .tint(.purple)
-            }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
 
-    // MARK: - アクションボタン
+    @ViewBuilder
     private var actionButtons: some View {
-        VStack(spacing: 12) {
-            switch sheet.status {
-            case .answering:
-                primaryButton(title: "回答を続ける", icon: "pencil") {
-                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                }
+        switch sheet.status {
+        case .answering:
+            Button {
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("解答を続ける", systemImage: "pencil")
+            }
 
-            case .answered:
-                primaryButton(title: "正解を入力する", icon: "checkmark.circle") {
-                    // 正解入力モードに切り替えて開く
-                    sheet.status = .scoring
-                    dataManager.updateSheet(sheet)
-                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                }
-                secondaryButton(title: "回答を修正する", icon: "pencil") {
-                    sheet.status = .answering
-                    dataManager.updateSheet(sheet)
-                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                }
+        case .answered:
+            Button {
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("正解を入力する", systemImage: "checkmark.circle")
+            }
 
-            case .scoring:
-                primaryButton(title: "正解入力を続ける", icon: "doc.text.magnifyingglass") {
-                    activeViewModel = AnswerSheetViewModel(sheet: sheet, dataManager: dataManager)
-                }
-                if sheet.isFullyCorrectAnswered {
-                    primaryButton(title: "採点する", icon: "star.fill") {
-                        sheet.status = .scored
-                        dataManager.updateSheet(sheet)
-                        reloadSheet()  // DataManager と @State の sheet を同期
-                        showScoringResult = true
-                    }
-                }
+        case .scoring:
+            Button {
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("採点を再開する", systemImage: "divider.circle")
+            }
 
-            case .scored:
-                primaryButton(title: "採点結果を見る", icon: "chart.bar") {
-                    showScoringResult = true
-                }
+        case .scored:
+            Button {
+                showingScoringResult = true
+            } label: {
+                Label("採点結果を見る", systemImage: "chart.bar.fill")
+            }
+
+            Button {
+                showingWrongAnswers = true
+            } label: {
+                Label("間違えた問題を確認", systemImage: "xmark.circle")
+            }
+
+            Button {
+                sheet.status = .answering
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("もう一度解き直す", systemImage: "arrow.counterclockwise")
+            }
+
+        case .correctInput:
+            Button {
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("正解入力を続ける", systemImage: "checkmark.seal")
+            }
+
+        case .correctReady:
+            Button {
+                activeViewModel = AnswerSheetViewModel(sheet: sheet)
+            } label: {
+                Label("本番解答を開始", systemImage: "play.circle")
+            }
+        }
+
+        // 途中経過ボタン（採点完了以外で、判定可能な問題がある場合）
+        if sheet.status != .scored && sheet.judgableCount > 0 {
+            Button {
+                showingScoringResult = true
+            } label: {
+                Label("途中経過を見る（\(sheet.judgableCount)問）", systemImage: "chart.bar")
+            }
+            .foregroundColor(.orange)
+        }
+    }
+
+    private func deleteSheet() {
+        modelContext.delete(sheet)
+        do { try modelContext.save() } catch { print("Failed to save: \(error)") }
+        dismiss()
+    }
+
+    private var performanceChart: some View {
+        Chart {
+            ForEach(sheet.partScores) { partScore in
+                BarMark(
+                    x: .value("パート", "P\(partScore.part.rawValue)"),
+                    y: .value("正解率", partScore.percentage)
+                )
+                .foregroundStyle(barColor(for: partScore.percentage).gradient)
+                .cornerRadius(4)
+            }
+            
+            RuleMark(y: .value("平均", sheet.scorePercentage))
+                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
+                .foregroundStyle(.secondary)
+        }
+        .chartYScale(domain: 0...100)
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel()
             }
         }
     }
 
-    private func primaryButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                Text(title)
-                    .fontWeight(.semibold)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(14)
+    private func barColor(for percentage: Double) -> Color {
+        switch percentage {
+        case 80...100: return .green
+        case 60..<80:  return .orange
+        default:       return .red
         }
-    }
-
-    private func secondaryButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                Text(title)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(Color(.systemGray5))
-            .foregroundColor(.primary)
-            .cornerRadius(14)
-        }
-    }
-
-    // MARK: - タイマーカード
-    private var timerCard: some View {
-        HStack {
-            Image(systemName: "clock")
-                .foregroundColor(.secondary)
-            Text("経過時間")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Spacer()
-            Text(sheet.formattedTime)
-                .font(.system(.body, design: .monospaced))
-                .fontWeight(.medium)
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
-    }
-
-    // MARK: - ヘルパー
-    private func reloadSheet() {
-        if let updated = dataManager.sheets.first(where: { $0.id == sheet.id }) {
-            sheet = updated
-        }
-    }
-}
-
-#Preview {
-    NavigationStack {
-        SheetDetailView(sheet: AnswerSheet(title: "テスト解答シート"))
-            .environmentObject(DataManager.shared)
     }
 }

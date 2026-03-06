@@ -1,210 +1,192 @@
 // HistoryView.swift
-// TOEICApp - 採点済みシートの履歴画面
+// TOEICApp - 履歴画面 (SwiftData対応)
 
 import SwiftUI
+import SwiftData
+import Charts
 
 struct HistoryView: View {
-
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showClearAlert = false
+    @Environment(\.modelContext) private var modelContext
+    
+    // 採点済みシートを取得（3 = .scored）
+    @Query(filter: #Predicate<AnswerSheet> { $0.statusRaw == 3 }, sort: \AnswerSheet.createdAt, order: .reverse)
+    private var scoredSheets: [AnswerSheet]
+    
+    @State private var showDeleteConfirm = false
+    
+    private var averageScore: Double {
+        guard !scoredSheets.isEmpty else { return 0 }
+        let total = scoredSheets.reduce(0.0) { $0 + $1.scorePercentage }
+        return total / Double(scoredSheets.count)
+    }
+    
+    private var scoreHistoryForChart: [(index: Int, score: Double)] {
+        // グラフは左から右へ時系列順にしたいので、古いものから並べる
+        scoredSheets.reversed().enumerated().map { (index, sheet) in
+            (index: index + 1, score: sheet.scorePercentage)
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if dataManager.scoredSheets.isEmpty {
+                if scoredSheets.isEmpty {
                     emptyView
                 } else {
-                    historyListView
+                    historyList
                 }
             }
             .navigationTitle("履歴")
-            .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                if !dataManager.scoredSheets.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("クリア") {
-                            showClearAlert = true
+                if !scoredSheets.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Image(systemName: "trash")
                         }
-                        .foregroundColor(.red)
                     }
                 }
             }
-            .alert("採点済みシートを全て削除しますか？", isPresented: $showClearAlert) {
-                Button("キャンセル", role: .cancel) {}
-                Button("削除する", role: .destructive) {
-                    for sheet in dataManager.scoredSheets {
-                        dataManager.deleteSheet(sheet)
-                    }
+            .confirmationDialog("履歴の全削除", isPresented: $showDeleteConfirm) {
+                Button("採点済みシートをすべて削除", role: .destructive) {
+                    deleteScoredSheets()
                 }
             } message: {
-                Text("採点済みの全シートが削除されます。この操作は元に戻せません。")
+                Text("採点済みの履歴データをすべて削除してもよろしいですか？")
             }
         }
     }
 
-    // MARK: - 空の状態
-    private var emptyView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "clock.badge.questionmark")
-                .font(.system(size: 60))
-                .foregroundColor(.gray.opacity(0.5))
-
-            Text("採点済みシートがありません")
-                .font(.title3)
-                .fontWeight(.semibold)
-
-            Text("解答シートを採点すると\nここに記録されます")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-
-    // MARK: - 履歴リスト
-    private var historyListView: some View {
+    private var historyList: some View {
         List {
-            // サマリーセクション
-            Section {
-                historySummary
+            Section(header: Text("統計")) {
+                statisticsSection
             }
-
-            // 日付別グループ
-            ForEach(groupedHistory, id: \.0) { date, sheets in
-                Section(header: Text(date)) {
+            
+            ForEach(groupedSheets, id: \.key) { month, sheets in
+                Section(header: Text(month)) {
                     ForEach(sheets) { sheet in
                         NavigationLink(destination: SheetDetailView(sheet: sheet)) {
-                            HistorySheetRowView(sheet: sheet)
+                            HistoryRowView(sheet: sheet)
                         }
                     }
                 }
             }
         }
-        .listStyle(.insetGrouped)
     }
 
-    // MARK: - サマリー
-    private var historySummary: some View {
-        VStack(spacing: 12) {
-            Text("採点サマリー")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 0) {
-                SummaryStatView(
-                    value: "\(dataManager.totalScoredSheets)",
-                    label: "採点回数",
-                    color: .blue
-                )
-                Divider().frame(height: 40)
-                SummaryStatView(
-                    value: String(format: "%.0f%%", dataManager.averageScore),
-                    label: "平均正解率",
-                    color: .green
-                )
+    private var statisticsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                statisticItem(title: "受験数", value: "\(scoredSheets.count)", color: .blue)
+                Divider()
+                statisticItem(title: "平均正解率", value: String(format: "%.0f%%", averageScore), color: .green)
+            }
+            
+            if scoredSheets.count >= 2 {
+                scoreTrendChart
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
-
-    // body 再評価のたびに生成しないよう static で1度だけインスタンス化（#4対応）
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy年MM月dd日"
-        f.locale = Locale(identifier: "ja_JP")
-        return f
-    }()
-
-    // 日付グループ
-    private var groupedHistory: [(String, [AnswerSheet])] {
-        let grouped = Dictionary(grouping: dataManager.scoredSheets) { sheet in
-            Self.dateFormatter.string(from: sheet.createdAt)
-        }
-        return grouped.sorted { $0.key > $1.key }
-    }
-}
-
-// MARK: - サマリー統計
-struct SummaryStatView: View {
-    let value: String
-    let label: String
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(color)
-            Text(label)
+    
+    private var scoreTrendChart: some View {
+        VStack(alignment: .leading) {
+            Text("スコア推移")
                 .font(.caption)
                 .foregroundColor(.secondary)
+            
+            Chart {
+                ForEach(scoreHistoryForChart, id: \.index) { data in
+                    LineMark(
+                        x: .value("回数", data.index),
+                        y: .value("正解率", data.score)
+                    )
+                    .foregroundStyle(Color.green.gradient)
+                    
+                    AreaMark(
+                        x: .value("回数", data.index),
+                        y: .value("正解率", data.score)
+                    )
+                    .foregroundStyle(Color.green.opacity(0.1).gradient)
+                }
+            }
+            .frame(height: 100)
+            .chartYScale(domain: 0...100)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+        }
+    }
+
+    private func statisticItem(title: String, value: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.title2.bold())
+                .foregroundColor(color)
         }
         .frame(maxWidth: .infinity)
     }
-}
 
-// MARK: - 履歴シート行
-struct HistorySheetRowView: View {
-    let sheet: AnswerSheet
-
-    var scoreColor: Color {
-        switch sheet.scorePercentage {
-        case 80...100: return .green
-        case 60..<80:  return .orange
-        default:       return .red
+    private var emptyView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+            Text("履歴がありません")
+                .font(.headline)
+            Text("採点済みのシートがここに表示されます")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
         }
     }
 
-    var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: sheet.createdAt)
+    private var groupedSheets: [(key: String, value: [AnswerSheet])] {
+        let grouped = Dictionary(grouping: scoredSheets) { sheet in
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy年MM月"
+            return formatter.string(from: sheet.createdAt)
+        }
+        return grouped.sorted { $0.key > $1.key }
     }
 
+    private func deleteScoredSheets() {
+        for sheet in scoredSheets {
+            modelContext.delete(sheet)
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save: \(error)")
+        }
+    }
+}
+
+struct HistoryRowView: View {
+    let sheet: AnswerSheet
+    
     var body: some View {
-        HStack(spacing: 14) {
-            // スコアサークル
-            ZStack {
-                Circle()
-                    .fill(scoreColor.opacity(0.15))
-                    .frame(width: 48, height: 48)
-
-                Text(String(format: "%.0f", sheet.scorePercentage))
-                    .font(.system(.caption, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundColor(scoreColor)
-            }
-
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(sheet.title)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Label("\(sheet.totalCorrect)/\(TOEICTemplate.totalQuestions)", systemImage: "checkmark.circle")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if sheet.elapsedSeconds > 0 {
-                        Label(sheet.formattedTime, systemImage: "clock")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                    .font(.subheadline.bold())
+                Text(sheet.createdAt, style: .date)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-
             Spacer()
-
-            Text(formattedDate)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(sheet.totalCorrect) / 200")
+                    .font(.headline)
+                    .foregroundColor(.blue)
+                Text(String(format: "%.1f%%", sheet.scorePercentage))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
-}
-
-#Preview {
-    HistoryView()
-        .environmentObject(DataManager.shared)
 }

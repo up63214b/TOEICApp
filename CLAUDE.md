@@ -63,9 +63,15 @@ TOEICApp/
 - スコア: リスニング 5-495点、リーディング 5-495点、合計 10-990点
 - 各問題は4択（Part 2のみ3択）
 
+## AIエージェントへの重要な指示（過剰な最適化の禁止）
+
+- **SwiftData Predicateの制約**: `AnswerSheet.swift` 内の `statusRaw` プロパティは、SwiftDataの `#Predicate` で enum を直接扱えない制約を回避するために意図的に用意されたものです。「冗長なプロパティ」として削除しないでください。また、View内の `@Query(filter: ...)` では **必ず `3` などの数値リテラルを使用** してください（`Status.scored.rawValue` 等はコンパイルエラーになります）。
+- **プロパティラッパーの変数を let にしない**: `@Bindable`, `@State`, `@Binding` などのプロパティラッパーが付与されている変数は、たとえ再代入がなくても **必ず `var` として維持** してください。AIが自動で `let` に変更するとコンパイルエラーになります。
+- **型定義の維持**: `AnswerSheet.swift` にはアプリ全体で使用される型定義（`TOEICTemplate`, `PartScore`, `WrongAnswer` 等）が集約されています。モデルクラスの整理時にこれらを削除しないように注意してください。
+
 ## Tech Preferences
 
 - SwiftUI で画面を構築（UIKit は使わない）
-- データ永続化は UserDefaults（将来的に SwiftData への移行を検討）
+- データ永続化は SwiftData を使用。
 - 外部ライブラリは極力使用しない
 - テストは XCTest のみ（ViewInspector 等の外部ライブラリは不要）

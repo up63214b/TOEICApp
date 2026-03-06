@@ -3,6 +3,7 @@
 
 import Foundation
 import Combine
+import SwiftData
 
 // MARK: - 入力モード
 enum InputMode {
@@ -11,34 +12,38 @@ enum InputMode {
 }
 
 // MARK: - ViewModel
+@MainActor
 class AnswerSheetViewModel: ObservableObject, Identifiable {
-
-    let id = UUID()
 
     @Published var sheet: AnswerSheet
     @Published var currentQuestion: Int = 1
     @Published var inputMode: InputMode = .answer
     @Published var isTimerRunning: Bool = false
     @Published var showGrid: Bool = false
+    
+    // 現在の問題番号に応じた実質的な表示数
+    var effectiveQuestionsPerPage: Int {
+        if (32...100).contains(currentQuestion) {
+            return 3
+        } else {
+            return 1
+        }
+    }
 
     private var timer: Timer?
-    private weak var dataManager: DataManager?
 
-    init(sheet: AnswerSheet, dataManager: DataManager) {
+    init(sheet: AnswerSheet) {
         self.sheet = sheet
-        self.dataManager = dataManager
 
         // モードを状態から推定
         switch sheet.status {
         case .answering:
             inputMode = .answer
-        case .answered, .scoring:
-            inputMode = .correct
-        case .scored:
+        case .answered, .scoring, .scored, .correctInput, .correctReady:
             inputMode = .correct
         }
 
-        // 回答入力中なら未回答の最初の問題へ移動
+        // 入力モードに応じて最初の未入力問題へ移動
         if inputMode == .answer {
             moveToFirstUnanswered()
         } else {
@@ -47,10 +52,24 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     deinit {
-        stopTimer()
+        // Timer should be stopped by the View (onDisappear) to ensure main thread safety.
+        // stopTimer() cannot be called here due to MainActor isolation.
+        timer?.invalidate()
     }
 
     // MARK: - 現在の問題情報
+
+    var currentQuestionRange: ClosedRange<Int> {
+        let perPage = effectiveQuestionsPerPage
+        if perPage > 1 {
+            let offset = (currentQuestion - 1) / perPage
+            let start = (offset * perPage) + 1
+            let end = min(start + perPage - 1, TOEICTemplate.totalQuestions)
+            return start...end
+        } else {
+            return currentQuestion...currentQuestion
+        }
+    }
 
     var currentPart: TOEICPart {
         TOEICTemplate.part(for: currentQuestion)
@@ -61,117 +80,139 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
     }
 
     var currentAnswer: String? {
+        let index = currentQuestion - 1
+        guard index < sheet.answers.count else { return nil }
+        
         switch inputMode {
         case .answer:
-            return sheet.userAnswers[currentQuestion - 1]
+            return sheet.answers[index].selectedOption
         case .correct:
-            return sheet.correctAnswers[currentQuestion - 1]
+            return sheet.answers[index].correctOption
         }
+    }
+
+    var answeredCount: Int {
+        sheet.answeredCount
     }
 
     var progress: Double {
-        switch inputMode {
-        case .answer:
-            return Double(sheet.answeredCount) / Double(TOEICTemplate.totalQuestions)
-        case .correct:
-            return Double(sheet.correctAnswersEnteredCount) / Double(TOEICTemplate.totalQuestions)
-        }
+        Double(answeredCount) / Double(TOEICTemplate.totalQuestions)
     }
 
     var progressText: String {
-        switch inputMode {
-        case .answer:
-            return "\(sheet.answeredCount) / \(TOEICTemplate.totalQuestions)"
-        case .correct:
-            return "\(sheet.correctAnswersEnteredCount) / \(TOEICTemplate.totalQuestions)"
-        }
+        "\(answeredCount) / \(TOEICTemplate.totalQuestions)"
     }
 
     // MARK: - 回答操作
 
     func selectChoice(_ choice: String) {
+        let index = currentQuestion - 1
+        guard index < sheet.answers.count else { return }
+        
         switch inputMode {
         case .answer:
             sheet.setAnswer(choice, for: currentQuestion)
             sheet.status = .answering
         case .correct:
             sheet.setCorrectAnswer(choice, for: currentQuestion)
-            sheet.status = .scoring
+            // 採点中ステータスにする（必要に応じて）
+            if sheet.status != .scored {
+                sheet.status = .scoring
+            }
         }
-        // save()は呼ばない（親ビューの再描画でfullScreenCoverが閉じるのを防ぐ）
+        
+        // 複数問題表示の場合の自動遷移ロジック
+        if effectiveQuestionsPerPage > 1 {
+            let range = currentQuestionRange
+            // ページ内の全問題が入力済みかチェック
+            let allAnswered = range.allSatisfy { q in
+                switch inputMode {
+                case .answer:  sheet.answers[q-1].selectedOption != nil
+                case .correct: sheet.answers[q-1].correctOption != nil
+                }
+            }
+            
+            if allAnswered && range.upperBound < TOEICTemplate.totalQuestions {
+                // 全て解き終わったら次のページへ
+                currentQuestion = range.upperBound + 1
+            } else {
+                // ページ内にとどまる。フォーカスは現在の問題のまま（自動で動かさないことで順不同入力をしやすくする）
+            }
+        } else {
+            // 単一問題表示の場合の自動遷移
+            if currentQuestion < TOEICTemplate.totalQuestions {
+                goNext()
+            }
+        }
     }
 
     func clearCurrentAnswer() {
-        switch inputMode {
-        case .answer:
-            sheet.clearAnswer(for: currentQuestion)
-        case .correct:
-            sheet.correctAnswers[currentQuestion - 1] = nil
-        }
+        let index = currentQuestion - 1
+        guard index < sheet.answers.count else { return }
+        sheet.answers[index].selectedOption = nil
     }
 
     // MARK: - ナビゲーション
 
     func goToQuestion(_ number: Int) {
-        guard number >= 1, number <= TOEICTemplate.totalQuestions else { return }
+        guard number >= 1, number <= 200 else { return }
         currentQuestion = number
     }
 
     func goNext() {
-        if currentQuestion < TOEICTemplate.totalQuestions {
+        if effectiveQuestionsPerPage > 1 {
+            let next = currentQuestionRange.upperBound + 1
+            currentQuestion = min(next, TOEICTemplate.totalQuestions)
+        } else if currentQuestion < TOEICTemplate.totalQuestions {
             currentQuestion += 1
         }
     }
 
     func goPrevious() {
-        if currentQuestion > 1 {
+        if effectiveQuestionsPerPage > 1 {
+            let prev = currentQuestionRange.lowerBound - effectiveQuestionsPerPage
+            currentQuestion = max(prev, 1)
+        } else if currentQuestion > 1 {
             currentQuestion -= 1
         }
     }
 
     func moveToFirstUnanswered() {
-        if let index = sheet.userAnswers.firstIndex(where: { $0 == nil }) {
+        if let index = sheet.answers.firstIndex(where: { $0.selectedOption == nil }) {
             currentQuestion = index + 1
         }
     }
 
     func moveToFirstUnansweredCorrect() {
-        if let index = sheet.correctAnswers.firstIndex(where: { $0 == nil }) {
+        if let index = sheet.answers.firstIndex(where: { $0.correctOption == nil }) {
             currentQuestion = index + 1
         }
     }
 
     // MARK: - ステータス遷移
 
-    /// 回答完了にする
     func finishAnswering() {
-        sheet.status = .answered
         stopTimer()
-        save()
+        sheet.status = .answered
     }
 
-    /// 正解入力モードに切り替え
     func startCorrectInput() {
         inputMode = .correct
         sheet.status = .scoring
         currentQuestion = 1
-        moveToFirstUnansweredCorrect()
-        save()
     }
 
-    /// 採点実行
+
+    func saveToStorage() {
+        // SwiftData does this automatically for reference types
+    }
+    
+    func finishCorrectInput() {
+        sheet.status = .correctReady
+    }
+
     func score() {
         sheet.status = .scored
-        save()
-    }
-
-    /// 回答入力に戻る
-    func resumeAnswering() {
-        inputMode = .answer
-        sheet.status = .answering
-        currentQuestion = 1
-        moveToFirstUnanswered()
-        save()
     }
 
     // MARK: - タイマー
@@ -181,7 +222,8 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         isTimerRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            DispatchQueue.main.async {
+            // クラスが @MainActor なので、メインスレッドでの実行を保証
+            Task { @MainActor in
                 self.sheet.elapsedSeconds += 1
             }
         }
@@ -201,34 +243,16 @@ class AnswerSheetViewModel: ObservableObject, Identifiable {
         }
     }
 
-    // MARK: - 永続化
-
-    /// 画面を閉じるときに呼ぶ（DataManagerに一括保存）
-    func saveToStorage() {
-        dataManager?.updateSheet(sheet)
-    }
-
-    private func save() {
-        dataManager?.updateSheet(sheet)
-    }
-
     // MARK: - グリッド用ヘルパー
 
-    /// 問題番号の回答状態を返す（グリッド表示用）
     func answerStatus(for questionNumber: Int) -> AnswerCellStatus {
         let index = questionNumber - 1
-        switch inputMode {
-        case .answer:
-            if sheet.userAnswers[index] != nil {
-                return .answered
-            }
-            return questionNumber == currentQuestion ? .current : .unanswered
-        case .correct:
-            if sheet.correctAnswers[index] != nil {
-                return .answered
-            }
-            return questionNumber == currentQuestion ? .current : .unanswered
+        guard index < sheet.answers.count else { return .unanswered }
+        
+        if sheet.answers[index].selectedOption != nil {
+            return .answered
         }
+        return questionNumber == currentQuestion ? .current : .unanswered
     }
 }
 
